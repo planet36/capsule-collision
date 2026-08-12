@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Steven Ward
+# SPDX-License-Identifier: MPL-2.0
+
 SRC_DIR := src
 OUT_DIR := out
 CASES := test/cases.txt

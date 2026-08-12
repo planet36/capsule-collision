@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Steven Ward
+# SPDX-License-Identifier: MPL-2.0
+
 # Known answers for Capsule.contains() and Capsule.intersects().
 #
 # One case per line. The leading keyword names what is being tested against the
