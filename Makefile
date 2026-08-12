@@ -7,7 +7,11 @@ CASES := test/cases.txt
 
 SOURCES := $(shell find $(SRC_DIR) -name '*.java')
 
-.PHONY: all build test clean
+# A fixed heap that is touched up front keeps the collector from resizing or
+# faulting in pages partway through a timed run.
+BENCH_FLAGS := -Xms1g -Xmx1g -XX:+AlwaysPreTouch
+
+.PHONY: all build test bench bench-noea clean
 
 all: build
 
@@ -19,6 +23,14 @@ $(OUT_DIR)/.compiled: $(SOURCES)
 
 test: build
 	java -cp $(OUT_DIR) geom.CapsuleTestRunner $(CASES)
+
+bench: build
+	java $(BENCH_FLAGS) -cp $(OUT_DIR) geom.CapsuleBench $(BENCH_ARGS)
+
+# The same benchmark with escape analysis off, which is what decides whether
+# the Vec3 objects contains() allocates per call cost anything.
+bench-noea: build
+	java $(BENCH_FLAGS) -XX:-DoEscapeAnalysis -cp $(OUT_DIR) geom.CapsuleBench $(BENCH_ARGS)
 
 clean:
 	rm -rf $(OUT_DIR)

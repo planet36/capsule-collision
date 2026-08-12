@@ -74,6 +74,49 @@ cylinder.
   cases file, `1e-12` is smaller than one ulp of the coordinates and does
   nothing at all.
 
+## Performance
+
+`CapsuleBench` measures the five query methods; run it with `make bench`.
+It is hand rolled because JMH is a third-party jar, so most of it is defense
+against the compiler rather than measurement. Read its class comment before
+changing it: the accumulated count, the prebuilt query arrays, and the batch
+loop are each doing a job, and removing one silently turns the benchmark into a
+measurement of nothing.
+
+Two things it has already settled:
+
+- **The query path calls no `Math` method at all.** `contains` and `intersects`
+  reduce to additions, multiplies, one divide and three compares; the only
+  square root in the class is in `distanceTo`. So proposals to swap in a faster
+  math library have nothing to act on here. (`FastMath` specifically is Apache
+  Commons Math, which is a dependency, and its `sqrt` is a bare delegation to
+  `Math.sqrt`, which is a JIT intrinsic already.)
+- **Escape analysis is what makes the `Vec3` design free.** `contains` allocates up to four `Vec3`
+  objects per call, and C2 scalarizes all of them: `make bench-noea` reruns
+  with `-XX:-DoEscapeAnalysis` and is three to four times slower, tracking the
+  allocation count per branch. The immutable `Vec3` design is therefore free in
+  practice but not free by construction. If a change makes one of those objects
+  escape — storing it, returning it through a non-inlined interface, making
+  `Vec3` non-final — the cost reappears, and `bench-noea` is the upper bound on
+  what that costs.
+
+- **The square root is worth avoiding, and now there is a number for it.**
+  `distanceTo` costs 0.9 to 1.6 ns per query more than
+  `distanceSquaredToAxisSegment`, 40% to 65% on top. That is the measured
+  justification for steering callers who only order or threshold distances to
+  the squared accessor, so the advice in the README is a performance claim and
+  not just an exactness one.
+- **An escaping `Vec3` is cheaper than it sounds.** `closestPointOnAxisSegment`
+  is the one query that returns a freshly allocated point to its caller, and
+  the benchmark stores it into an array so the allocation really happens. It
+  still costs no more than `contains`, which allocates the same objects but
+  gets them all scalarized and then does a distance comparison on top. So a
+  change that makes one object escape is not a disaster; it is a change that
+  makes all four escape, by defeating inlining, that costs the factor above.
+
+Because escape analysis already does it, hand-inlining the math over raw
+`double` fields is not worth doing. Measure before believing otherwise.
+
 ## Test data
 
 `test/cases.txt` is the source of truth for expected behavior; its own comment

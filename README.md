@@ -32,7 +32,7 @@ coordinates and a radius.
 
 `Capsule` also has a constructor taking seven raw coordinates, and supporting
 queries: `distanceSquaredToAxisSegment`, `distanceTo` (distance from a point to
-the capsule, zero inside), `closestPointOnAxisSegment`, `axis`, and `height`.
+the capsule, zero inside), `closestPointOnAxisSegment`, and `axis`.
 
 For ordering or thresholding distances — ranking capsules by proximity, testing
 against a cutoff — use `distanceSquaredToAxisSegment` and square the threshold
@@ -55,6 +55,58 @@ java -cp out geom.CapsuleTestRunner test/cases.txt
 
 The runner prints a line per failure and a summary, and exits nonzero if any
 case fails.
+
+## Benchmarking
+
+```
+make bench        # time the query methods
+make bench-noea   # the same, with escape analysis disabled
+```
+
+`CapsuleBench` times the five query methods against three query distributions —
+projections landing inside the segment, projections clamping to a cap, and
+uniform points in the bounding box — because the branch mix, not the
+arithmetic, is what moves the number. It reports nanoseconds per query and
+throughput, as the minimum and median over the measured iterations:
+
+```
+distribution  method            result    min ns/op    median ns/op     Mops/s
+interior      contains            2110        3.271           3.985      305.7
+interior      intersects          3072        3.164           4.097      316.1
+interior      distanceSq        5.2216        2.811           3.356      355.8
+interior      distanceTo        0.4872        4.422           5.255      226.2
+interior      closestPoint      1.0034        3.272           3.479      305.6
+```
+
+`distanceSq` is `distanceSquaredToAxisSegment` and `closestPoint` is
+`closestPointOnAxisSegment`. The `result` column is a hit count for the two
+boolean methods and a mean returned value for the rest; it exists so a reader
+can see the work was not optimized away.
+
+Two things the numbers show. The square root is worth avoiding: `distanceTo`
+costs about 0.9 to 1.6 ns more per query than `distanceSq`, which is 40% to 65%
+on top, and is why the sqrt-free accessor is the one recommended for ordering
+and thresholding. And `closestPoint` is no more expensive than `contains`,
+even though it is the one method whose returned `Vec3` really does escape to
+its caller: the single allocation costs less than the distance comparison
+`contains` goes on to do.
+
+Pass `--distribution=NAME`, `--warmup=N`, `--measure=N`, or `--sweeps=N`
+through `BENCH_ARGS` to narrow or lengthen a run.
+
+Treat the numbers as indicative. JMH is the right tool for Java microbenchmarks
+and is a third-party jar, so this harness defends against dead code
+elimination, constant folding and cold compilation by hand, and it cannot fork
+a JVM per measurement the way JMH does — by default all three distributions
+share one compilation of the sweep loop, so each one's branch profile is
+blended with the others'. Use `--distribution` for an uncontaminated figure.
+
+`make bench-noea` reruns with `-XX:-DoEscapeAnalysis`. The gap between the two
+is the cost the JIT is absorbing by scalarizing the `Vec3` objects each query
+allocates, which on this code is a factor of three to four. With the
+optimization off, every method converges on the same cost and even the square
+root disappears into the noise, which is a fair summary of how much of this
+code's speed is allocation the JIT removes rather than arithmetic.
 
 ## The tests
 
