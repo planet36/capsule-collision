@@ -53,14 +53,6 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
     }
 
     /**
-     * Returns the distance between the endpoints, which is the length of the
-     * cylindrical section, excluding the two caps.
-     */
-    public double height() {
-        return p1.distance(p2);
-    }
-
-    /**
      * Returns true if {@code q} lies inside or on the surface of this capsule.
      *
      * <p>This is one distance comparison against the closest point on the axis

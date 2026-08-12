@@ -62,11 +62,6 @@ public record Vec3(double x, double y, double z) {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    /** Returns the distance between this point and {@code v}. */
-    public double distance(Vec3 v) {
-        return Math.sqrt(distanceSquared(v));
-    }
-
     /** Returns true if no component is NaN or infinite. */
     public boolean isFinite() {
         return Double.isFinite(x) && Double.isFinite(y) && Double.isFinite(z);
