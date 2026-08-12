@@ -125,11 +125,19 @@ radius. A `POINT` case ends with the point being tested and expects `IN` or
 `HIT` or `MISS`. A `#` begins a comment; blank lines are ignored. Pass different
 files as arguments to `CapsuleTestRunner` to run them instead.
 
+Either kind of line may expect `INVALID` instead, which asserts that the shapes
+it describes are illegal and that a constructor rejects them. Such a line runs
+no query, and is how the validation rules are covered: that a capsule's radius
+must be positive while a sphere's need only be non-negative, and that no radius
+or coordinate may be NaN or infinite. Because a line names both a capsule and a
+sphere and either may be the illegal one, keep the shape that is not under test
+obviously legal.
+
 The cases cover on-axis and off-axis interiors, points exactly on the lateral
 surface and on the hemispherical caps, spheres exactly touching each of those,
 arbitrary axis orientations, negative coordinates, a million-to-one aspect ratio
-that stresses numerical precision, and the two extreme shapes: an axis shorter
-than the radius, and coincident endpoints.
+that stresses numerical precision, the two extreme shapes — an axis shorter than
+the radius, and coincident endpoints — and every way a shape can be illegal.
 
 The runner additionally checks relationships that hold for any geometry
 regardless of the expected answers, so they catch errors the listed cases might

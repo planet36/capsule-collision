@@ -124,6 +124,13 @@ header documents the line format. When adding behavior, add a keyword and cases
 here rather than writing a separate harness; `Query` in the runner carries each
 keyword's field count.
 
+Validation is tested by the `INVALID` expectation rather than by a new query
+keyword, so those lines keep the field layout of the `POINT` and `SPHERE` cases
+around them. This is why `TestCase` holds the raw endpoints and radii instead of
+a built `Capsule` and `Sphere`: whether a constructor accepts them is the
+question an `INVALID` case is asking, so construction happens per case in the
+runner and a rejection is a result rather than a parse error.
+
 Boundary cases use values exactly representable in binary floating point, so
 that `IN` on a surface is not a coin flip on rounding. Keep new boundary cases
 exactly representable.

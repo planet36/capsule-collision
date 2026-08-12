@@ -19,8 +19,14 @@
 #                  is closed, so a point exactly on the surface is IN and shapes
 #                  that merely touch do HIT
 #
+# Either kind of line may expect INVALID instead, which asserts that the shapes
+# it describes are illegal and that a constructor rejects them. Such a line runs
+# no query. A line names both a capsule and a sphere and either may be the
+# illegal one, so keep the shape that is not under test obviously legal.
+#
 # A '#' begins a comment that runs to the end of the line. Blank lines are
-# ignored. Keywords are not case sensitive.
+# ignored. Keywords are not case sensitive, but NaN, Infinity and -Infinity are:
+# they are spelled the way Double.parseDouble accepts them.
 
 
 # ===========================================================================
@@ -192,3 +198,59 @@ SPHERE  1 1 1   1 1 1    2    1 1 5        2       HIT   # 4 apart, radii sum to
 SPHERE  1 1 1   1 1 1    2    1 1 5        1.9     MISS
 SPHERE  1 1 1   1 1 1    2    1 1 5        3       HIT
 SPHERE  1 1 1   1 1 1    2    1 1 1        0       HIT   # a point at the center
+
+
+# ===========================================================================
+# Validation.
+#
+# These assert what the constructors reject. The rule is asymmetric on purpose:
+# a capsule's radius must be positive, because a zero radius capsule is a bare
+# segment rather than a solid, while a sphere's radius may be zero, since that
+# is a point and querying with one is meaningful. Neither may be NaN or
+# infinite, and no coordinate may be either.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# A capsule's radius must be positive. The sphere on each line is the query
+# point at radius zero, which is always legal, so the capsule is what is being
+# rejected.
+# ---------------------------------------------------------------------------
+POINT   0 0 0    0 0 10    0          0 0 5    INVALID  # zero is a segment, not a solid
+POINT   0 0 0    0 0 10   -0.0        0 0 5    INVALID  # negative zero is still zero
+POINT   0 0 0    0 0 10   -1          0 0 5    INVALID  # negative
+POINT   0 0 0    0 0 10    NaN        0 0 5    INVALID
+POINT   0 0 0    0 0 10    Infinity   0 0 5    INVALID
+POINT   0 0 0    0 0 10   -Infinity   0 0 5    INVALID
+
+# Any positive radius is legal, however small
+POINT   0 0 0    0 0 10    1e-100     0 0 5    IN       # on the axis, so inside
+POINT   0 0 0    0 0 10    1e-100     1 0 5    OUT      # a unit away, so outside
+
+# ---------------------------------------------------------------------------
+# A capsule's endpoints must be finite.
+# ---------------------------------------------------------------------------
+POINT   NaN 0 0        0 0 10        2    0 0 5    INVALID
+POINT   0 NaN 0        0 0 10        2    0 0 5    INVALID
+POINT   0 0 0          0 0 NaN       2    0 0 5    INVALID
+POINT   Infinity 0 0   0 0 10        2    0 0 5    INVALID
+POINT   0 0 0          0 -Infinity 0 2    0 0 5    INVALID
+
+# ---------------------------------------------------------------------------
+# A sphere's radius may be zero, unlike a capsule's, but not negative. The
+# capsule on each line is legal, so the sphere is what is being rejected.
+# ---------------------------------------------------------------------------
+SPHERE  0 0 0    0 0 10   2    0 0 5    0          HIT      # zero is a point query
+SPHERE  0 0 0    0 0 10   2    0 0 5   -0.0        HIT      # and negative zero is zero
+SPHERE  0 0 0    0 0 10   2    0 0 5   -1          INVALID  # but negative is not
+SPHERE  0 0 0    0 0 10   2    0 0 5    NaN        INVALID
+SPHERE  0 0 0    0 0 10   2    0 0 5    Infinity   INVALID
+SPHERE  0 0 0    0 0 10   2    0 0 5   -Infinity   INVALID
+
+# ---------------------------------------------------------------------------
+# A sphere's center must be finite, including when it is a query point, which
+# is a sphere of radius zero.
+# ---------------------------------------------------------------------------
+SPHERE  0 0 0    0 0 10   2    NaN 0 5        1    INVALID
+SPHERE  0 0 0    0 0 10   2    0 Infinity 5   1    INVALID
+POINT   0 0 0    0 0 10   2    NaN 0 5             INVALID
+POINT   0 0 0    0 0 10   2    0 0 -Infinity       INVALID

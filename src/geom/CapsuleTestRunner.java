@@ -37,6 +37,12 @@ import java.util.List;
  * interchangeable, and {@code TRUE}/{@code FALSE} and {@code YES}/{@code NO}
  * are also accepted.
  *
+ * <p>Either kind of line may instead expect {@code INVALID}, which asserts that
+ * the shapes it describes are illegal and that a constructor rejects them. Such
+ * a line runs no query, and is how the validation rules are tested: that a
+ * capsule's radius must be positive while a sphere's need only be
+ * non-negative, and that neither may be NaN or infinite.
+ *
  * <p>Beyond the declared answers, every case is also checked against the
  * relationships that must hold between the methods for any geometry. See
  * {@link #checkInvariants}.
@@ -48,10 +54,51 @@ public final class CapsuleTestRunner {
     /**
      * One parsed line of the cases file. A point case is represented as a
      * sphere case with a radius of zero, which is exactly what it is.
+     *
+     * <p>The shapes are held as their raw parts rather than as a {@link Capsule}
+     * and a {@link Sphere}, because a case may assert that those constructors
+     * reject what is on the line. Building them is therefore something the
+     * runner does per case, so that a rejection can be a result rather than a
+     * failure to parse.
      */
     private record TestCase(
-            int lineNumber, String sourceLine, Query query, Capsule capsule,
-            Sphere sphere, boolean expected) {
+            int lineNumber, String sourceLine, Query query,
+            Vec3 p1, Vec3 p2, double radius, Vec3 point, double sphereRadius,
+            Expected expected) {
+
+        /** @throws IllegalArgumentException if this line's capsule is illegal */
+        Capsule capsule() {
+            return new Capsule(p1, p2, radius);
+        }
+
+        /** @throws IllegalArgumentException if this line's sphere is illegal */
+        Sphere sphere() {
+            return new Sphere(point, sphereRadius);
+        }
+    }
+
+    /** What a case asserts about the line it is on. */
+    private enum Expected {
+        /** The query is true: the point is in, or the sphere hits. */
+        TRUE,
+        /** The query is false: the point is out, or the sphere misses. */
+        FALSE,
+        /**
+         * At least one shape on the line is illegal and must be rejected by its
+         * constructor. This is the only expectation that runs no query.
+         */
+        INVALID;
+
+        static Expected parse(String field) {
+            return switch (field.toUpperCase()) {
+                case "IN", "HIT", "TRUE", "YES" -> TRUE;
+                case "OUT", "MISS", "FALSE", "NO" -> FALSE;
+                case "INVALID", "THROWS" -> INVALID;
+                default -> throw new ParseException("unknown expected result \"" + field
+                        + "\", expected IN or OUT for a point, HIT or MISS for a sphere,"
+                        + " or INVALID for a shape that must be rejected");
+            };
+        }
     }
 
     /** What is being tested against the capsule. */
@@ -126,14 +173,32 @@ public final class CapsuleTestRunner {
         int mismatches = 0;
         int violations = 0;
         for (TestCase c : cases) {
-            boolean actual = c.query().test(c.capsule(), c.sphere());
-            if (actual != c.expected()) {
+            if (c.expected() == Expected.INVALID) {
+                mismatches += checkRejected(file, c);
+                continue;
+            }
+
+            Capsule capsule;
+            Sphere sphere;
+            try {
+                capsule = c.capsule();
+                sphere = c.sphere();
+            } catch (IllegalArgumentException e) {
+                System.out.printf("FAIL %s:%d: shape rejected as illegal: %s%n    %s%n",
+                        file, c.lineNumber(), e.getMessage(), c.sourceLine().strip());
+                mismatches++;
+                continue;
+            }
+
+            boolean expected = c.expected() == Expected.TRUE;
+            boolean actual = c.query().test(capsule, sphere);
+            if (actual != expected) {
                 System.out.printf("FAIL %s:%d: expected %s, got %s%n    %s%n",
-                        file, c.lineNumber(), describe(c.query(), c.expected()),
+                        file, c.lineNumber(), describe(c.query(), expected),
                         describe(c.query(), actual), c.sourceLine().strip());
                 mismatches++;
             }
-            violations += checkInvariants(file, c);
+            violations += checkInvariants(file, c, capsule, sphere);
         }
 
         System.out.printf("%s: %d case%s, %d passed, %d failed%n",
@@ -151,13 +216,32 @@ public final class CapsuleTestRunner {
     }
 
     /**
+     * Checks that an {@code INVALID} case really is rejected, and returns 1 if
+     * it was accepted instead.
+     *
+     * <p>A line names both a capsule and a sphere and either may be the illegal
+     * one, so the case passes when either constructor throws. Keep the shape
+     * that is not under test obviously legal, or a case can pass for the wrong
+     * reason.
+     */
+    private static int checkRejected(Path file, TestCase c) {
+        try {
+            c.capsule();
+            c.sphere();
+        } catch (IllegalArgumentException e) {
+            return 0;
+        }
+        System.out.printf("FAIL %s:%d: expected an illegal shape, but both were accepted%n"
+                + "    %s%n", file, c.lineNumber(), c.sourceLine().strip());
+        return 1;
+    }
+
+    /**
      * Checks the relationships that must hold between the methods for this
      * case's geometry no matter what its expected answer is, and returns the
      * number that do not.
      */
-    private static int checkInvariants(Path file, TestCase c) {
-        Capsule capsule = c.capsule();
-        Sphere sphere = c.sphere();
+    private static int checkInvariants(Path file, TestCase c, Capsule capsule, Sphere sphere) {
         Vec3 q = sphere.center();
         double r = sphere.radius();
 
@@ -234,13 +318,14 @@ public final class CapsuleTestRunner {
         double radius = number(fields[7]);
         Vec3 point = new Vec3(number(fields[8]), number(fields[9]), number(fields[10]));
         // A point case is a sphere case of radius zero, which is what it is.
-        // Sphere's own constructor rejects a bad radius, and the caller reports
-        // that the same way as any other malformed field.
         double sphereRadius = query == Query.SPHERE ? number(fields[11]) : 0.0;
-        boolean expected = parseExpected(fields[fields.length - 1]);
+        Expected expected = Expected.parse(fields[fields.length - 1]);
 
-        return new TestCase(lineNumber, sourceLine, query, new Capsule(p1, p2, radius),
-                new Sphere(point, sphereRadius), expected);
+        // The shapes are deliberately not built here. Whether a constructor
+        // accepts them is what an INVALID case is asking about, so it belongs
+        // with the results and not with the parse errors.
+        return new TestCase(lineNumber, sourceLine, query, p1, p2, radius, point,
+                sphereRadius, expected);
     }
 
     private static Query parseQuery(String field) {
@@ -250,15 +335,6 @@ public final class CapsuleTestRunner {
             throw new ParseException("unknown query \"" + field + "\", expected one of "
                     + Arrays.toString(Query.values()));
         }
-    }
-
-    private static boolean parseExpected(String field) {
-        return switch (field.toUpperCase()) {
-            case "IN", "HIT", "TRUE", "YES" -> true;
-            case "OUT", "MISS", "FALSE", "NO" -> false;
-            default -> throw new ParseException("unknown expected result \"" + field
-                    + "\", expected IN or OUT for a point, HIT or MISS for a sphere");
-        };
     }
 
     private static double number(String field) {
