@@ -30,11 +30,15 @@ invariant is violated.
 
 ## Architecture
 
-Three files in `src/geom`, plus the test data in `test/cases.txt`:
+Four files in `src/geom`, plus the test data in `test/cases.txt`:
 
 - `Vec3` — immutable record, a 3D point or vector, with the vector operations.
 - `Capsule` — record of `(p1, p2, radius)`. `contains` tests a point,
-  `intersectsSphere` tests a sphere.
+  `intersects` tests a `Sphere`.
+- `Sphere` — record of `(center, radius)`. A pure data type on purpose: it
+  validates and nothing else. Resist adding `Sphere.contains`,
+  `Sphere.intersects(Sphere)`, or a `Segment` type; that is a general geometry
+  library and a different project.
 - `CapsuleTestRunner` — `main` that reads cases with known answers from a text
   file and compares them against both methods.
 
@@ -49,9 +53,9 @@ every method reduces to `distanceSquaredToAxisSegment`, which is the class's
 square-root-free primitive:
 
 - `contains` compares it against `radius * radius`.
-- `intersectsSphere` compares it against `(radius + sphereRadius)` squared.
+- `intersects` compares it against `(radius + sphere.radius())` squared.
   Growing a capsule by a radius yields a capsule, so no separate geometry is
-  needed, and the two methods agree exactly at `sphereRadius == 0`.
+  needed, and the two methods agree exactly for a zero radius `Sphere`.
 
 Keep both comparisons squared — they are exact for points placed on the surface
 by construction, which is what lets the cases file assert boundary behavior.
@@ -70,9 +74,10 @@ cylinder.
 ## Invariants and validation
 
 - The capsule's `radius` must be **positive**; the constructor rejects zero.
-  A sphere's radius passed to `intersectsSphere` may be **zero** (it is then a
-  point query, and the basis of one of the runner's invariants) but not
-  negative. This asymmetry is intentional.
+  A `Sphere`'s radius may be **zero** (it is then a point query, and the basis
+  of one of the runner's invariants) but not negative. This asymmetry is
+  intentional, and each rule lives in its own record's constructor, which is
+  why `contains` and `intersects` are pure geometry that never throws.
 - Coincident endpoints are legal and yield a sphere — the exact limiting case.
   The `axisLengthSquared == 0.0` guard in `closestPointOnAxisSegment` exists
   only to avoid dividing zero by zero, not to implement a special case. An axis
@@ -91,7 +96,7 @@ cylinder.
   Phrase invariants on `distanceSquaredToAxisSegment` instead, which is what
   the tests actually compare, or assert a method's definition directly.
 
-  Do not solve this by adding a tolerance parameter to `intersectsSphere`. That
+  Do not solve this by adding a tolerance parameter to `intersects`. That
   would export a harness problem into the public API and change the method's
   meaning from "do these solids share a point" to "do they nearly share one",
   and any fixed default is scale-broken: at the million-to-one capsule in the

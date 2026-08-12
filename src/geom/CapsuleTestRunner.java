@@ -9,7 +9,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Checks {@link Capsule#contains} and {@link Capsule#intersectsSphere} against
+ * Checks {@link Capsule#contains} and {@link Capsule#intersects} against
  * a file of cases with known answers.
  *
  * <p>Usage: {@code java geom.CapsuleTestRunner [cases-file...]}, defaulting to
@@ -48,7 +48,7 @@ public final class CapsuleTestRunner {
      */
     private record TestCase(
             int lineNumber, String sourceLine, Query query, Capsule capsule,
-            Vec3 point, double sphereRadius, boolean expected) {
+            Sphere sphere, boolean expected) {
     }
 
     /** What is being tested against the capsule. */
@@ -63,10 +63,10 @@ public final class CapsuleTestRunner {
             this.fieldCount = fieldCount;
         }
 
-        boolean test(Capsule capsule, Vec3 point, double sphereRadius) {
+        boolean test(Capsule capsule, Sphere sphere) {
             return switch (this) {
-                case POINT -> capsule.contains(point);
-                case SPHERE -> capsule.intersectsSphere(point, sphereRadius);
+                case POINT -> capsule.contains(sphere.center());
+                case SPHERE -> capsule.intersects(sphere);
             };
         }
     }
@@ -123,7 +123,7 @@ public final class CapsuleTestRunner {
         int mismatches = 0;
         int violations = 0;
         for (TestCase c : cases) {
-            boolean actual = c.query().test(c.capsule(), c.point(), c.sphereRadius());
+            boolean actual = c.query().test(c.capsule(), c.sphere());
             if (actual != c.expected()) {
                 System.out.printf("FAIL %s:%d: expected %s, got %s%n    %s%n",
                         file, c.lineNumber(), describe(c.query(), c.expected()),
@@ -154,11 +154,12 @@ public final class CapsuleTestRunner {
      */
     private static int checkInvariants(Path file, TestCase c) {
         Capsule capsule = c.capsule();
-        Vec3 q = c.point();
-        double r = c.sphereRadius();
+        Sphere sphere = c.sphere();
+        Vec3 q = sphere.center();
+        double r = sphere.radius();
 
         boolean contains = capsule.contains(q);
-        boolean hits = capsule.intersectsSphere(q, r);
+        boolean hits = capsule.intersects(sphere);
         double segmentSquared = capsule.distanceSquaredToAxisSegment(q);
         double capsuleRadius = capsule.radius();
         double combined = capsuleRadius + r;
@@ -172,10 +173,10 @@ public final class CapsuleTestRunner {
         violations += check(file, c, hits == (segmentSquared <= combined * combined),
                 "the sphere test disagrees with the squared distance to the segment");
         // A point test is the radius zero case of the sphere test.
-        violations += check(file, c, capsule.intersectsSphere(q, 0.0) == contains,
+        violations += check(file, c, capsule.intersects(new Sphere(q, 0.0)) == contains,
                 "a zero radius sphere disagrees with the point test");
         // Growing a sphere that already touches cannot make it miss.
-        violations += check(file, c, !hits || capsule.intersectsSphere(q, r + 1.0),
+        violations += check(file, c, !hits || capsule.intersects(new Sphere(q, r + 1.0)),
                 "growing a sphere that hits makes it miss");
         // A contained point is at distance zero. This is exact: containment
         // means the squared distance is at most radius squared, and taking the
@@ -229,15 +230,14 @@ public final class CapsuleTestRunner {
         Vec3 p2 = new Vec3(number(fields[4]), number(fields[5]), number(fields[6]));
         double radius = number(fields[7]);
         Vec3 point = new Vec3(number(fields[8]), number(fields[9]), number(fields[10]));
+        // A point case is a sphere case of radius zero, which is what it is.
+        // Sphere's own constructor rejects a bad radius, and the caller reports
+        // that the same way as any other malformed field.
         double sphereRadius = query == Query.SPHERE ? number(fields[11]) : 0.0;
-        if (!(sphereRadius >= 0.0) || Double.isInfinite(sphereRadius)) {
-            throw new ParseException(
-                    "sphere radius must be finite and non-negative: " + sphereRadius);
-        }
         boolean expected = parseExpected(fields[fields.length - 1]);
 
         return new TestCase(lineNumber, sourceLine, query, new Capsule(p1, p2, radius),
-                point, sphereRadius, expected);
+                new Sphere(point, sphereRadius), expected);
     }
 
     private static Query parseQuery(String field) {

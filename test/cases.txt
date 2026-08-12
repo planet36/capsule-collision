@@ -1,4 +1,4 @@
-# Known answers for Capsule.contains() and Capsule.intersectsSphere().
+# Known answers for Capsule.contains() and Capsule.intersects().
 #
 # One case per line. The leading keyword names what is being tested against the
 # capsule, and determines how many fields follow:

@@ -7,7 +7,7 @@ package geom;
  * direction; nothing here assumes an axis-aligned orientation.
  *
  * <p>{@link #contains} tests a point against the capsule and
- * {@link #intersectsSphere} tests a sphere against it. Both treat the capsule
+ * {@link #intersects} tests a {@link Sphere} against it. Both treat the capsule
  * as a closed set: a point exactly on the surface is contained and shapes that
  * touch do intersect, subject to floating point rounding of the inputs.
  *
@@ -69,34 +69,24 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
     }
 
     /**
-     * Returns true if the sphere with the given center and radius overlaps this
-     * capsule, that is, if the two solids share at least one point. Touching
-     * counts as overlapping, since both shapes are closed.
+     * Returns true if {@code sphere} overlaps this capsule, that is, if the two
+     * solids share at least one point. Touching counts as overlapping, since
+     * both shapes are closed.
      *
      * <p>Growing a capsule by the sphere's radius yields a capsule with the
      * same axis and a larger radius, so this is {@link #contains} against the
      * combined radius, and the two agree exactly when the sphere's radius is
      * zero.
-     *
-     * <p>The sphere's radius may be zero, unlike the capsule's own radius: a
-     * zero radius sphere is a point, and querying with one is meaningful.
-     *
-     * @throws IllegalArgumentException if the sphere's radius is negative, NaN,
-     *     or infinite
      */
-    public boolean intersectsSphere(Vec3 center, double sphereRadius) {
-        if (!(sphereRadius >= 0.0) || Double.isInfinite(sphereRadius)) {
-            throw new IllegalArgumentException(
-                    "sphere radius must be finite and non-negative: " + sphereRadius);
-        }
-        double combined = radius + sphereRadius;
-        return distanceSquaredToAxisSegment(center) <= combined * combined;
+    public boolean intersects(Sphere sphere) {
+        double combined = radius + sphere.radius();
+        return distanceSquaredToAxisSegment(sphere.center()) <= combined * combined;
     }
 
     /**
      * Returns the squared distance from {@code q} to the closest point on the
      * axis segment, which is the quantity both {@link #contains} and
-     * {@link #intersectsSphere} are built on.
+     * {@link #intersects} are built on.
      *
      * <p>This is the square root free primitive of the class. Comparing it
      * against a squared threshold is exact where the corresponding comparison

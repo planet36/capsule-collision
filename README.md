@@ -14,6 +14,7 @@ Pure Java, no dependencies beyond the JDK.
 
 ```java
 import geom.Capsule;
+import geom.Sphere;
 import geom.Vec3;
 
 Capsule capsule = new Capsule(
@@ -21,11 +22,15 @@ Capsule capsule = new Capsule(
         new Vec3(4, 6, 3),   // the other end of the axis
         2.0);                // radius, which must be positive
 
-capsule.contains(new Vec3(2.5, 4.0, 3.0));               // point inside?
-capsule.intersectsSphere(new Vec3(2.5, 4.0, 7.0), 0.5);  // sphere overlapping?
+capsule.contains(new Vec3(2.5, 4.0, 3.0));                        // point inside?
+capsule.intersects(new Sphere(new Vec3(2.5, 4.0, 7.0), 0.5));     // sphere overlapping?
 ```
 
-There is also a constructor taking seven raw coordinates, and supporting
+Both shapes validate on construction, so the query methods are pure geometry
+and never throw. `Sphere` also has a four-argument constructor taking raw
+coordinates and a radius.
+
+`Capsule` also has a constructor taking seven raw coordinates, and supporting
 queries: `distanceSquaredToAxisSegment`, `distanceTo` (distance from a point to
 the capsule, zero inside), `closestPointOnAxisSegment`, `axis`, and `height`.
 
@@ -93,7 +98,7 @@ from a query point to the axis segment, found by projecting onto the axis and
 clamping the parameter to `[0, 1]`:
 
 - **Point containment** compares it against `radius²`.
-- **Sphere intersection** compares it against `(radius + sphereRadius)²`.
+- **Sphere intersection** compares it against `(radius + sphere.radius())²`.
   Growing a capsule by the sphere's radius yields a capsule with the same axis
   and a larger radius, so the two agree exactly when the sphere's radius is zero.
 
@@ -121,8 +126,9 @@ problems, and a capsule has none of them.
   NaN, and infinite radii, and non-finite endpoints, throwing
   `IllegalArgumentException`.
 - **A sphere's radius may be zero**, unlike the capsule's own. A zero radius
-  sphere is a point, and querying with one is meaningful; `intersectsSphere`
-  rejects only negative, NaN, and infinite radii.
+  sphere is a point, and querying with one is meaningful; `Sphere` rejects only
+  negative, NaN, and infinite radii. Validation lives in each shape's
+  constructor, so `contains` and `intersects` are pure geometry and never throw.
 - **Coincident endpoints are legal**, giving a sphere of the same radius. This
   is the exact limiting case, not a special case: the closest point on a
   zero-length segment is the endpoint itself. An axis shorter than the radius is
