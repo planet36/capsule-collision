@@ -15,7 +15,7 @@ $(OUT_DIR)/.compiled: $(SOURCES)
 	@touch $@
 
 test: build
-	java -cp $(OUT_DIR) geom.ContainmentTestRunner $(CASES)
+	java -cp $(OUT_DIR) geom.CapsuleTestRunner $(CASES)
 
 clean:
 	rm -rf $(OUT_DIR)
