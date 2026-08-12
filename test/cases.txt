@@ -1,0 +1,137 @@
+# Known answers for Cylinder.contains() and Cylinder.containsAsCapsule().
+#
+# One case per line, twelve whitespace separated fields:
+#
+#   shape   x1 y1 z1   x2 y2 z2   radius   qx qy qz   expected
+#
+#   shape     CYLINDER (flat end caps) or CAPSULE (hemispherical end caps)
+#   x1..z1    one end of the axis
+#   x2..z2    the other end of the axis
+#   radius    radius of the shape
+#   qx..qz    the point being tested
+#   expected  IN or OUT; both shapes are closed, so a point exactly on the
+#             surface is IN
+#
+# A '#' begins a comment that runs to the end of the line. Blank lines are
+# ignored. Keywords are not case sensitive.
+
+
+# ---------------------------------------------------------------------------
+# Axis aligned cylinder: axis along +Z from the origin, height 10, radius 2.
+# ---------------------------------------------------------------------------
+
+# Interior
+CYLINDER   0 0 0    0 0 10   2    0 0 5          IN    # on the axis, mid height
+CYLINDER   0 0 0    0 0 10   2    1 1 5          IN    # off axis by sqrt(2)
+CYLINDER   0 0 0    0 0 10   2    0 0 0.001      IN    # just inside the bottom cap
+CYLINDER   0 0 0    0 0 10   2    0 0 9.999      IN    # just inside the top cap
+
+# On the surface
+CYLINDER   0 0 0    0 0 10   2    2 0 5          IN    # on the lateral surface, +X
+CYLINDER   0 0 0    0 0 10   2   -2 0 5          IN    # on the lateral surface, -X
+CYLINDER   0 0 0    0 0 10   2    0 2 5          IN    # on the lateral surface, +Y
+CYLINDER   0 0 0    0 0 10   2    0 0 0          IN    # center of the bottom cap
+CYLINDER   0 0 0    0 0 10   2    0 0 10         IN    # center of the top cap
+CYLINDER   0 0 0    0 0 10   2    2 0 0          IN    # bottom rim
+CYLINDER   0 0 0    0 0 10   2    2 0 10         IN    # top rim
+
+# Outside radially
+CYLINDER   0 0 0    0 0 10   2    2.0000001 0 5  OUT   # barely past the lateral surface
+CYLINDER   0 0 0    0 0 10   2    3 0 5          OUT
+CYLINDER   0 0 0    0 0 10   2    1.5 1.5 5      OUT   # off axis by sqrt(4.5)
+
+# Outside axially: these are the cases a naive infinite-cylinder test gets wrong
+CYLINDER   0 0 0    0 0 10   2    0 0 -0.001     OUT   # just below the bottom cap
+CYLINDER   0 0 0    0 0 10   2    0 0 10.001     OUT   # just above the top cap
+CYLINDER   0 0 0    0 0 10   2    1 0 -1         OUT   # within the radius, past the cap
+CYLINDER   0 0 0    0 0 10   2    0 0 1000       OUT   # on the axis line, far past the cap
+
+# ---------------------------------------------------------------------------
+# The same axis and radius as a capsule: the hemispherical caps add the region
+# within one radius of each endpoint.
+# ---------------------------------------------------------------------------
+
+CAPSULE    0 0 0    0 0 10   2    0 0 5          IN    # cylindrical middle
+CAPSULE    0 0 0    0 0 10   2    2 0 5          IN    # on the lateral surface
+CAPSULE    0 0 0    0 0 10   2    3 0 5          OUT   # past the lateral surface
+CAPSULE    0 0 0    0 0 10   2    0 0 -0.001     IN    # inside the bottom cap
+CAPSULE    0 0 0    0 0 10   2    1 0 -1         IN    # inside the bottom cap, off axis
+CAPSULE    0 0 0    0 0 10   2    0 0 -2         IN    # bottom pole, on the cap surface
+CAPSULE    0 0 0    0 0 10   2    0 0 12         IN    # top pole, on the cap surface
+CAPSULE    0 0 0    0 0 10   2    0 0 -2.001     OUT   # just past the bottom pole
+CAPSULE    0 0 0    0 0 10   2    0 0 12.001     OUT   # just past the top pole
+CAPSULE    0 0 0    0 0 10   2    1 0 11.5       IN    # inside the top cap, off axis
+CAPSULE    0 0 0    0 0 10   2    2 0 11         OUT   # outside the top cap, off axis
+
+# ---------------------------------------------------------------------------
+# Arbitrary orientation: axis (3, 4, 0) of length 5, offset from the origin.
+# ---------------------------------------------------------------------------
+
+CYLINDER   1 2 3    4 6 3    2    2.5 4 3        IN    # axis midpoint
+CYLINDER   1 2 3    4 6 3    2    1 2 3          IN    # center of one end cap
+CYLINDER   1 2 3    4 6 3    2    4 6 3          IN    # center of the other end cap
+CYLINDER   1 2 3    4 6 3    2    2.5 4 5        IN    # on the lateral surface, +Z
+CYLINDER   1 2 3    4 6 3    2    2.5 4 1        IN    # on the lateral surface, -Z
+CYLINDER   1 2 3    4 6 3    2    2.5 4 5.5      OUT   # past the lateral surface
+CYLINDER   1 2 3    4 6 3    2    4.02 2.86 3    IN    # off axis by 1.9, within the XY plane
+CYLINDER   1 2 3    4 6 3    2    4.18 2.74 3    OUT   # off axis by 2.1, within the XY plane
+CYLINDER   1 2 3    4 6 3    2    4.6 6.8 3      OUT   # past the far end cap, on the axis
+CYLINDER   1 2 3    4 6 3    2    0.4 1.2 3      OUT   # past the near end cap, on the axis
+CAPSULE    1 2 3    4 6 3    2    4.6 6.8 3      IN    # inside the far cap
+CAPSULE    1 2 3    4 6 3    2    0.4 1.2 3      IN    # inside the near cap
+
+# Diagonal axis (1, 1, 1)
+CYLINDER   0 0 0    1 1 1    1    0.5 0.5 0.5    IN    # axis midpoint
+CYLINDER   0 0 0    1 1 1    1    1 0 0          IN    # off axis by sqrt(2/3)
+CYLINDER   0 0 0    1 1 1    1    2 2 2          OUT   # past the far end cap
+CYLINDER   0 0 0    1 1 1    1    1.5 1.5 1.5    OUT   # past the far end cap
+CAPSULE    0 0 0    1 1 1    1    1.5 1.5 1.5    IN    # inside the far cap
+CAPSULE    0 0 0    1 1 1    1    2 2 2          OUT   # past the far cap
+
+# ---------------------------------------------------------------------------
+# Negative coordinates, axis along +Z from (-5, -5, -5), height 10, radius 3.
+# ---------------------------------------------------------------------------
+
+CYLINDER  -5 -5 -5   -5 -5 5   3   -5 -5 0       IN    # axis midpoint
+CYLINDER  -5 -5 -5   -5 -5 5   3   -2 -5 0       IN    # on the lateral surface
+CYLINDER  -5 -5 -5   -5 -5 5   3   -1.9 -5 0     OUT   # past the lateral surface
+CYLINDER  -5 -5 -5   -5 -5 5   3   -5 -5 -5.5    OUT   # past the lower end cap
+CAPSULE   -5 -5 -5   -5 -5 5   3   -5 -5 -8      IN    # lower pole, on the cap surface
+CAPSULE   -5 -5 -5   -5 -5 5   3   -5 -5 -8.5    OUT   # past the lower pole
+
+# ---------------------------------------------------------------------------
+# Long and thin: exercises the precision of the radial test, where computing
+# the perpendicular distance by subtraction rather than by cross product would
+# lose most of its significant digits.
+# ---------------------------------------------------------------------------
+
+CYLINDER   0 0 0    1000000 0 0   0.001   500000 0.0005 0    IN
+CYLINDER   0 0 0    1000000 0 0   0.001   500000 0.0015 0    OUT
+CYLINDER   0 0 0    1000000 0 0   0.001   500000 0.001 0     IN    # on the lateral surface
+CYLINDER   0 0 0    1000000 0 0   0.001   1000000.5 0 0      OUT   # past the far end cap
+CAPSULE    0 0 0    1000000 0 0   0.001   1000000.0005 0 0   IN    # inside the far cap
+
+# ---------------------------------------------------------------------------
+# Degenerate radius: a zero radius cylinder is its axis segment, and a zero
+# radius capsule is the same.
+# ---------------------------------------------------------------------------
+
+CYLINDER   0 0 0    0 0 1    0    0 0 0.5        IN    # on the axis segment
+CYLINDER   0 0 0    0 0 1    0    0.001 0 0.5    OUT   # off the axis segment
+CYLINDER   0 0 0    0 0 1    0    0 0 1.5        OUT   # past the end of the segment
+CAPSULE    0 0 0    0 0 1    0    0 0 0.5        IN
+CAPSULE    0 0 0    0 0 1    0    0 0 1.5        OUT
+
+# ---------------------------------------------------------------------------
+# Degenerate axis: coincident endpoints. The cylinder has no volume and no
+# defined orientation, so it contains nothing; the capsule is the limiting
+# case, a sphere centered on the shared endpoint.
+# ---------------------------------------------------------------------------
+
+CYLINDER   1 1 1    1 1 1    2    1 1 1          OUT   # even the endpoint itself
+CYLINDER   1 1 1    1 1 1    2    1 1 2          OUT
+CAPSULE    1 1 1    1 1 1    2    1 1 1          IN    # center of the sphere
+CAPSULE    1 1 1    1 1 1    2    1 1 2          IN    # inside the sphere
+CAPSULE    1 1 1    1 1 1    2    1 1 3          IN    # on the sphere surface
+CAPSULE    1 1 1    1 1 1    2    1 1 3.5        OUT   # outside the sphere
+CAPSULE    1 1 1    1 1 1    2    2.5 2.5 2.5    OUT   # outside the sphere, diagonally
