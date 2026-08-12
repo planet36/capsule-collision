@@ -78,11 +78,25 @@ cylinder.
   only to avoid dividing zero by zero, not to implement a special case. An axis
   shorter than the radius is legal too, giving a nearly spherical capsule.
 - `CapsuleTestRunner.checkInvariants` asserts on every case that the methods
-  agree with each other. New relationships belong there. Invariants phrased on
-  `distanceSquaredToAxisSegment` are exact, since that is what the tests
-  compare; any invariant relating `distanceTo` to them still needs slack,
-  because it takes a square root while they compare squared distances, so at
-  exact tangency the two need not agree on the last bit.
+  agree with each other. New relationships belong there, and **every one of them
+  currently holds exactly — there is no tolerance constant anywhere in this
+  repository. Keep it that way.**
+
+  If a proposed invariant seems to need a fudge factor, it is almost certainly
+  asserting a round trip through a square root rather than a fact about the
+  geometry. The specific one to avoid is "a sphere of exactly `distanceTo(q)`
+  must hit": no fixed slack makes it hold, because the error to absorb scales
+  with `radius + distance` rather than with `distance`, so for a fat capsule
+  near the query point it is unbounded when measured in ulps of the distance.
+  Phrase invariants on `distanceSquaredToAxisSegment` instead, which is what
+  the tests actually compare, or assert a method's definition directly.
+
+  Do not solve this by adding a tolerance parameter to `intersectsSphere`. That
+  would export a harness problem into the public API and change the method's
+  meaning from "do these solids share a point" to "do they nearly share one",
+  and any fixed default is scale-broken: at the million-to-one capsule in the
+  cases file, `1e-12` is smaller than one ulp of the coordinates and does
+  nothing at all.
 
 ## Test data
 

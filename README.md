@@ -79,7 +79,12 @@ regardless of the expected answers, so they catch errors the listed cases might
 miss: both tests agree with a squared comparison against
 `distanceSquaredToAxisSegment`, a zero radius sphere agrees with the point test,
 growing a sphere that already hits cannot make it miss, a contained point is at
-distance zero, and a sphere reaching the measured distance does hit.
+distance zero, and `distanceTo` is the segment distance less the radius.
+
+Every one of those holds exactly. There is no tolerance or epsilon constant
+anywhere in this project, in the library or the tests: the containment and
+intersection tests are squared comparisons that never take a square root, so
+their boundaries are exact rather than approximate.
 
 ## How it works
 

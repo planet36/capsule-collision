@@ -177,18 +177,28 @@ public final class CapsuleTestRunner {
         // Growing a sphere that already touches cannot make it miss.
         violations += check(file, c, !hits || capsule.intersectsSphere(q, r + 1.0),
                 "growing a sphere that hits makes it miss");
-        // A contained point is at distance zero, and a sphere reaching past the
-        // measured distance must hit, which rules out the distance being an
-        // overestimate. This last one keeps a slack that the squared invariants
-        // above do not need: distanceTo() takes a square root while the tests
-        // compare squared distances, and at exact tangency the two need not
-        // agree on the last bit. That is inherent to relating the two, not
-        // something the squared accessor can remove.
+        // A contained point is at distance zero. This is exact: containment
+        // means the squared distance is at most radius squared, and taking the
+        // root of both sides preserves that, since IEEE arithmetic recovers a
+        // value exactly from the root of its own square.
         violations += check(file, c, !contains || capsule.distanceTo(q) == 0.0,
                 "a contained point has a nonzero distance to the capsule");
-        double reach = capsule.distanceTo(q) * (1.0 + 1e-12) + 1e-12;
-        violations += check(file, c, capsule.intersectsSphere(q, reach),
-                "a sphere reaching past the measured distance misses");
+        // distanceTo() is the segment distance less the radius, floored at
+        // zero. Asserting the definition catches a reformulation that changes
+        // the result, and does so without a tolerance.
+        //
+        // There is deliberately no invariant of the form "a sphere of exactly
+        // the measured distance must hit". That crosses the square root in the
+        // opposite direction, and no fixed slack makes it hold: the error to be
+        // absorbed scales with radius plus distance, not with distance, so for
+        // a fat capsule near the query point it is unbounded in ulps of the
+        // distance. It is a claim about floating point round tripping rather
+        // than about geometry, and the squared invariants above already pin the
+        // behavior it was reaching for.
+        violations += check(file, c,
+                capsule.distanceTo(q)
+                        == Math.max(0.0, Math.sqrt(segmentSquared) - capsuleRadius),
+                "distanceTo disagrees with the segment distance less the radius");
         return violations;
     }
 
