@@ -30,9 +30,9 @@ public record Sphere(Vec3 center, double radius) {
         if (!center.isFinite()) {
             throw new IllegalArgumentException("center must be finite: " + center);
         }
-        if (!(radius >= 0.0) || Double.isInfinite(radius)) {
+        if ((radius < 0.0) || !Double.isFinite(radius)) {
             throw new IllegalArgumentException(
-                    "sphere radius must be finite and non-negative: " + radius);
+                    "sphere radius must be non-negative and finite: " + radius);
         }
     }
 

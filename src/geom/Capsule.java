@@ -34,9 +34,9 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
             throw new IllegalArgumentException(
                     "endpoints must be finite: " + p1 + ", " + p2);
         }
-        if (!(radius > 0.0) || Double.isInfinite(radius)) {
+        if ((radius <= 0.0) || !Double.isFinite(radius)) {
             throw new IllegalArgumentException(
-                    "radius must be finite and positive: " + radius);
+                    "radius must be positive and finite: " + radius);
         }
     }
 
