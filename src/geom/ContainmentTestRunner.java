@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -16,41 +17,66 @@ import java.util.List;
  * otherwise.
  *
  * <p>The file is line oriented. A {@code #} begins a comment that runs to the
- * end of the line, and blank lines are ignored. Every other line is one case of
- * twelve whitespace separated fields:
+ * end of the line, and blank lines are ignored. Every other line is one case,
+ * of whitespace separated fields whose count depends on the leading keyword:
  *
  * <pre>
- *   shape  x1 y1 z1  x2 y2 z2  radius  qx qy qz  expected
+ *   CYLINDER         x1 y1 z1  x2 y2 z2  radius  qx qy qz                expected
+ *   CAPSULE          x1 y1 z1  x2 y2 z2  radius  qx qy qz                expected
+ *   CYLINDER_SPHERE  x1 y1 z1  x2 y2 z2  radius  cx cy cz  sphereRadius  expected
+ *   CAPSULE_SPHERE   x1 y1 z1  x2 y2 z2  radius  cx cy cz  sphereRadius  expected
  * </pre>
  *
- * where {@code shape} is {@code CYLINDER} or {@code CAPSULE}, the first six
- * numbers are the axis endpoints, the next three are the point being tested,
- * and {@code expected} is {@code IN} or {@code OUT}. Keywords are matched
- * without regard to case, and {@code TRUE}/{@code FALSE} and {@code YES}/
- * {@code NO} are accepted in place of {@code IN}/{@code OUT}.
+ * <p>The first six numbers are the axis endpoints and the seventh is the
+ * shape's radius. The point forms follow with the point being tested and expect
+ * {@code IN} or {@code OUT}; the sphere forms follow with the sphere's center
+ * and radius and expect {@code HIT} or {@code MISS}. Keywords are matched
+ * without regard to case, the two pairs of result keywords are interchangeable,
+ * and {@code TRUE}/{@code FALSE} and {@code YES}/{@code NO} are also accepted.
  *
  * <p>Beyond the declared answers, every case is also checked against the
- * invariant that a capsule contains its cylinder, which holds no matter what
- * the expected answers say.
+ * relationships that must hold between the methods for any geometry, such as a
+ * capsule containing its cylinder and a point test agreeing with a zero radius
+ * sphere. See {@link #checkInvariants}.
  */
 public final class ContainmentTestRunner {
 
     private static final String DEFAULT_CASES_FILE = "test/cases.txt";
 
-    /** One parsed line of the cases file. */
+    /**
+     * One parsed line of the cases file. A point case is represented as a
+     * sphere case with a radius of zero, which is exactly what it is.
+     */
     private record TestCase(
             int lineNumber, String sourceLine, Shape shape, Cylinder cylinder,
-            Vec3 point, boolean expected) {
+            Vec3 point, double sphereRadius, boolean expected) {
     }
 
     private enum Shape {
-        CYLINDER,
-        CAPSULE;
+        CYLINDER(12),
+        CAPSULE(12),
+        CYLINDER_SPHERE(13),
+        CAPSULE_SPHERE(13);
 
-        boolean contains(Cylinder cylinder, Vec3 point) {
-            return this == CYLINDER
-                    ? cylinder.contains(point)
-                    : cylinder.containsAsCapsule(point);
+        /** Number of whitespace separated fields a case of this shape has. */
+        final int fieldCount;
+
+        Shape(int fieldCount) {
+            this.fieldCount = fieldCount;
+        }
+
+        /** True if this shape's case carries a sphere radius field. */
+        boolean isSphere() {
+            return this == CYLINDER_SPHERE || this == CAPSULE_SPHERE;
+        }
+
+        boolean test(Cylinder cylinder, Vec3 point, double sphereRadius) {
+            return switch (this) {
+                case CYLINDER -> cylinder.contains(point);
+                case CAPSULE -> cylinder.containsAsCapsule(point);
+                case CYLINDER_SPHERE -> cylinder.intersectsSphere(point, sphereRadius);
+                case CAPSULE_SPHERE -> cylinder.intersectsSphereAsCapsule(point, sphereRadius);
+            };
         }
     }
 
@@ -106,14 +132,14 @@ public final class ContainmentTestRunner {
         int mismatches = 0;
         int violations = 0;
         for (TestCase c : cases) {
-            boolean actual = c.shape().contains(c.cylinder(), c.point());
+            boolean actual = c.shape().test(c.cylinder(), c.point(), c.sphereRadius());
             if (actual != c.expected()) {
                 System.out.printf("FAIL %s:%d: expected %s, got %s%n    %s%n",
-                        file, c.lineNumber(), describe(c.expected()), describe(actual),
-                        c.sourceLine().strip());
+                        file, c.lineNumber(), describe(c.shape(), c.expected()),
+                        describe(c.shape(), actual), c.sourceLine().strip());
                 mismatches++;
             }
-            violations += checkCapsuleContainsCylinder(file, c);
+            violations += checkInvariants(file, c);
         }
 
         System.out.printf("%s: %d case%s, %d passed, %d failed%n",
@@ -131,18 +157,50 @@ public final class ContainmentTestRunner {
     }
 
     /**
-     * Verifies that the capsule contains the cylinder for this case's geometry,
-     * which must hold regardless of the expected answer, and returns 1 if it
-     * does not.
+     * Checks the relationships that must hold between the methods for this
+     * case's geometry no matter what its expected answer is, and returns the
+     * number that do not.
      */
-    private static int checkCapsuleContainsCylinder(Path file, TestCase c) {
-        if (!c.cylinder().contains(c.point()) || c.cylinder().containsAsCapsule(c.point())) {
+    private static int checkInvariants(Path file, TestCase c) {
+        Cylinder cyl = c.cylinder();
+        Vec3 q = c.point();
+        double r = c.sphereRadius();
+
+        boolean inCylinder = cyl.contains(q);
+        boolean inCapsule = cyl.containsAsCapsule(q);
+        boolean hitsCylinder = cyl.intersectsSphere(q, r);
+        boolean hitsCapsule = cyl.intersectsSphereAsCapsule(q, r);
+
+        int violations = 0;
+        violations += check(file, c, !inCylinder || inCapsule,
+                "the point is in the cylinder but not in the capsule");
+        violations += check(file, c, !hitsCylinder || hitsCapsule,
+                "the sphere hits the cylinder but not the capsule");
+        // A point test is the radius zero case of the corresponding sphere test.
+        violations += check(file, c, cyl.intersectsSphere(q, 0.0) == inCylinder,
+                "a zero radius sphere disagrees with the point in cylinder test");
+        violations += check(file, c, cyl.intersectsSphereAsCapsule(q, 0.0) == inCapsule,
+                "a zero radius sphere disagrees with the point in capsule test");
+        // Growing a sphere that already touches cannot make it miss.
+        violations += check(file, c, !hitsCylinder || cyl.intersectsSphere(q, r + 1.0),
+                "growing a sphere that hits the cylinder makes it miss");
+        violations += check(file, c, !hitsCapsule || cyl.intersectsSphereAsCapsule(q, r + 1.0),
+                "growing a sphere that hits the capsule makes it miss");
+        // A sphere reaching at least as far as the measured distance must hit.
+        violations += check(file, c, cyl.distanceTo(q) > r || hitsCylinder,
+                "the distance to the cylinder is within the sphere radius but the sphere misses");
+        violations += check(file, c, cyl.distanceToAsCapsule(q) > r || hitsCapsule,
+                "the distance to the capsule is within the sphere radius but the sphere misses");
+        return violations;
+    }
+
+    /** Reports {@code description} if {@code holds} is false, and returns 1 if so. */
+    private static int check(Path file, TestCase c, boolean holds, String description) {
+        if (holds) {
             return 0;
         }
-        System.out.printf(
-                "INVARIANT VIOLATION %s:%d: point is in the cylinder but not in the capsule%n"
-                        + "    %s%n",
-                file, c.lineNumber(), c.sourceLine().strip());
+        System.out.printf("INVARIANT VIOLATION %s:%d: %s%n    %s%n",
+                file, c.lineNumber(), description, c.sourceLine().strip());
         return 1;
     }
 
@@ -153,35 +211,42 @@ public final class ContainmentTestRunner {
 
     private static TestCase parse(int lineNumber, String sourceLine, String content) {
         String[] fields = content.strip().split("\\s+");
-        if (fields.length != 12) {
-            throw new ParseException("expected 12 fields, found " + fields.length);
+        Shape shape = parseShape(fields[0]);
+        if (fields.length != shape.fieldCount) {
+            throw new ParseException("expected " + shape.fieldCount + " fields for "
+                    + shape + ", found " + fields.length);
         }
 
-        Shape shape = parseShape(fields[0]);
         Vec3 p1 = new Vec3(number(fields[1]), number(fields[2]), number(fields[3]));
         Vec3 p2 = new Vec3(number(fields[4]), number(fields[5]), number(fields[6]));
         double radius = number(fields[7]);
         Vec3 point = new Vec3(number(fields[8]), number(fields[9]), number(fields[10]));
-        boolean expected = parseExpected(fields[11]);
+        double sphereRadius = shape.isSphere() ? number(fields[11]) : 0.0;
+        if (!(sphereRadius >= 0.0) || Double.isInfinite(sphereRadius)) {
+            throw new ParseException(
+                    "sphere radius must be finite and non-negative: " + sphereRadius);
+        }
+        boolean expected = parseExpected(fields[fields.length - 1]);
 
-        return new TestCase(
-                lineNumber, sourceLine, shape, new Cylinder(p1, p2, radius), point, expected);
+        return new TestCase(lineNumber, sourceLine, shape, new Cylinder(p1, p2, radius),
+                point, sphereRadius, expected);
     }
 
     private static Shape parseShape(String field) {
         try {
             return Shape.valueOf(field.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new ParseException("unknown shape \"" + field + "\", expected CYLINDER or CAPSULE");
+            throw new ParseException("unknown shape \"" + field + "\", expected one of "
+                    + Arrays.toString(Shape.values()));
         }
     }
 
     private static boolean parseExpected(String field) {
         return switch (field.toUpperCase()) {
-            case "IN", "TRUE", "YES" -> true;
-            case "OUT", "FALSE", "NO" -> false;
-            default -> throw new ParseException(
-                    "unknown expected result \"" + field + "\", expected IN or OUT");
+            case "IN", "HIT", "TRUE", "YES" -> true;
+            case "OUT", "MISS", "FALSE", "NO" -> false;
+            default -> throw new ParseException("unknown expected result \"" + field
+                    + "\", expected IN or OUT for a point, HIT or MISS for a sphere");
         };
     }
 
@@ -193,7 +258,10 @@ public final class ContainmentTestRunner {
         }
     }
 
-    private static String describe(boolean contained) {
-        return contained ? "IN" : "OUT";
+    private static String describe(Shape shape, boolean result) {
+        if (shape.isSphere()) {
+            return result ? "HIT" : "MISS";
+        }
+        return result ? "IN" : "OUT";
     }
 }

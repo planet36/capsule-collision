@@ -1,16 +1,23 @@
-# Known answers for Cylinder.contains() and Cylinder.containsAsCapsule().
+# Known answers for the containment and intersection methods of Cylinder.
 #
-# One case per line, twelve whitespace separated fields:
+# One case per line. The leading keyword selects the test and determines how
+# many fields follow:
 #
-#   shape   x1 y1 z1   x2 y2 z2   radius   qx qy qz   expected
+#   CYLINDER         x1 y1 z1  x2 y2 z2  radius  qx qy qz                expected
+#   CAPSULE          x1 y1 z1  x2 y2 z2  radius  qx qy qz                expected
+#   CYLINDER_SPHERE  x1 y1 z1  x2 y2 z2  radius  cx cy cz  sphereRadius  expected
+#   CAPSULE_SPHERE   x1 y1 z1  x2 y2 z2  radius  cx cy cz  sphereRadius  expected
 #
-#   shape     CYLINDER (flat end caps) or CAPSULE (hemispherical end caps)
-#   x1..z1    one end of the axis
-#   x2..z2    the other end of the axis
-#   radius    radius of the shape
-#   qx..qz    the point being tested
-#   expected  IN or OUT; both shapes are closed, so a point exactly on the
-#             surface is IN
+#   CYLINDER..       flat end caps; CAPSULE.. hemispherical end caps
+#   x1..z1           one end of the axis
+#   x2..z2           the other end of the axis
+#   radius           radius of the cylinder or capsule
+#   qx..qz           the point being tested
+#   cx..cz           center of the sphere being tested
+#   sphereRadius     radius of the sphere being tested
+#   expected         IN or OUT for a point, HIT or MISS for a sphere; the shapes
+#                    are closed, so a point exactly on the surface is IN and
+#                    shapes that merely touch do HIT
 #
 # A '#' begins a comment that runs to the end of the line. Blank lines are
 # ignored. Keywords are not case sensitive.
@@ -135,3 +142,71 @@ CAPSULE    1 1 1    1 1 1    2    1 1 2          IN    # inside the sphere
 CAPSULE    1 1 1    1 1 1    2    1 1 3          IN    # on the sphere surface
 CAPSULE    1 1 1    1 1 1    2    1 1 3.5        OUT   # outside the sphere
 CAPSULE    1 1 1    1 1 1    2    2.5 2.5 2.5    OUT   # outside the sphere, diagonally
+
+
+# ===========================================================================
+# Sphere intersection. Same canonical cylinder as above: axis along +Z from
+# the origin, height 10, radius 2. The last number before the answer is the
+# radius of the sphere.
+# ===========================================================================
+
+# A sphere of radius zero is a point, and must agree with the point tests
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 5        0       HIT
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 -0.001   0       MISS
+
+# Sphere inside, and sphere swallowing the whole cylinder
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 5        1       HIT   # entirely inside
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 5        100     HIT   # entirely surrounds
+
+# Approaching the lateral surface from +X, whose nearest point is 3 away
+CYLINDER_SPHERE   0 0 0   0 0 10   2    5 0 5        3       HIT   # exactly touching
+CYLINDER_SPHERE   0 0 0   0 0 10   2    5 0 5        3.001   HIT
+CYLINDER_SPHERE   0 0 0   0 0 10   2    5 0 5        2.999   MISS
+CYLINDER_SPHERE   0 0 0   0 0 10   2    10 0 5       1       MISS  # nearest point is 8 away
+
+# Approaching an end cap along the axis
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 13       3       HIT   # exactly touching
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 13       2.999   MISS
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 -4       4       HIT   # exactly touching
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 -4       3.9     MISS
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 -50      50      HIT   # far, but large enough
+CYLINDER_SPHERE   0 0 0   0 0 10   2    0 0 -50      49      MISS
+
+# Approaching the rim, where the nearest point of the cylinder is neither on
+# the lateral surface nor on the end cap. The center below is 4 past the top
+# cap and 3 beyond the radius, so the rim is 5 away, not 4: a test that took
+# the larger of the two excesses, or that grew the cylinder by the sphere
+# radius, would wrongly report a hit for the 4.5 case.
+CYLINDER_SPHERE   0 0 0   0 0 10   2    5 0 14       5       HIT   # exactly touching the rim
+CYLINDER_SPHERE   0 0 0   0 0 10   2    5 0 14       5.1     HIT
+CYLINDER_SPHERE   0 0 0   0 0 10   2    5 0 14       4.9     MISS
+CYLINDER_SPHERE   0 0 0   0 0 10   2    5 0 14       4.5     MISS
+CYLINDER_SPHERE   0 0 0   0 0 10   2    8 0 -8       10      HIT   # bottom rim, exactly touching
+CYLINDER_SPHERE   0 0 0   0 0 10   2    8 0 -8       9       MISS
+
+# The same spheres against the capsule, which fills in the rim with a
+# hemisphere and so is reached sooner from beyond the ends
+CAPSULE_SPHERE    0 0 0   0 0 10   2    0 0 5        0       HIT
+CAPSULE_SPHERE    0 0 0   0 0 10   2    5 0 5        3       HIT   # lateral, same as the cylinder
+CAPSULE_SPHERE    0 0 0   0 0 10   2    5 0 5        2.999   MISS
+CAPSULE_SPHERE    0 0 0   0 0 10   2    0 0 13       1       HIT   # top pole is only 1 away
+CAPSULE_SPHERE    0 0 0   0 0 10   2    0 0 13       0.999   MISS
+CAPSULE_SPHERE    0 0 0   0 0 10   2    5 0 14       4.5     HIT   # a miss against the cylinder
+CAPSULE_SPHERE    0 0 0   0 0 10   2    5 0 14       4.4     MISS
+
+# Arbitrary orientation: axis (3, 4, 0) of length 5
+CYLINDER_SPHERE   1 2 3   4 6 3    2    2.5 4 7      2       HIT   # exactly touching, radially
+CYLINDER_SPHERE   1 2 3   4 6 3    2    2.5 4 7      1.9     MISS
+CYLINDER_SPHERE   1 2 3   4 6 3    2    7 10 3       5       HIT   # exactly touching an end cap
+CYLINDER_SPHERE   1 2 3   4 6 3    2    7 10 3       4.9     MISS
+
+# Zero radius cylinder: the axis segment
+CYLINDER_SPHERE   0 0 0   0 0 1    0    1 0 0.5      1       HIT   # exactly touching
+CYLINDER_SPHERE   0 0 0   0 0 1    0    1 0 0.5      0.9     MISS
+
+# Degenerate axis: the cylinder is empty and cannot be hit at all, while the
+# capsule is a sphere, making that case a sphere against a sphere
+CYLINDER_SPHERE   1 1 1   1 1 1    2    1 1 1        5       MISS
+CAPSULE_SPHERE    1 1 1   1 1 1    2    1 1 5        2       HIT   # 4 apart, radii sum to 4
+CAPSULE_SPHERE    1 1 1   1 1 1    2    1 1 5        1.9     MISS
+CAPSULE_SPHERE    1 1 1   1 1 1    2    1 1 5        3       HIT

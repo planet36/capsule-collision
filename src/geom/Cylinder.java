@@ -13,8 +13,12 @@ package geom;
  * planes. {@link #contains} and {@link #containsAsCapsule} implement those two
  * shapes respectively, so a capsule always contains its cylinder.
  *
- * <p>Both tests treat the shapes as closed sets: a point exactly on the surface
- * is contained, subject to floating point rounding of the inputs.
+ * <p>{@link #intersectsSphere} and {@link #intersectsSphereAsCapsule} test each
+ * shape against a sphere rather than against a point.
+ *
+ * <p>All of these treat the shapes as closed sets: a point exactly on the
+ * surface is contained and shapes that touch do intersect, subject to floating
+ * point rounding of the inputs.
  */
 public record Cylinder(Vec3 p1, Vec3 p2, double radius) {
 
@@ -30,6 +34,11 @@ public record Cylinder(Vec3 p1, Vec3 p2, double radius) {
             throw new IllegalArgumentException(
                     "endpoints must be finite: " + p1 + ", " + p2);
         }
+        requireRadius(radius);
+    }
+
+    /** @throws IllegalArgumentException if the radius is negative or not finite */
+    private static void requireRadius(double radius) {
         if (!(radius >= 0.0) || Double.isInfinite(radius)) {
             throw new IllegalArgumentException(
                     "radius must be finite and non-negative: " + radius);
@@ -123,6 +132,104 @@ public record Cylinder(Vec3 p1, Vec3 p2, double radius) {
      */
     public boolean containsAsCapsule(Vec3 q) {
         return q.distanceSquared(closestPointOnAxisSegment(q)) <= radius * radius;
+    }
+
+    /**
+     * Returns true if the sphere with the given center and radius overlaps this
+     * cylinder, that is, if the two solids share at least one point. Touching
+     * counts as overlapping, since both shapes are closed.
+     *
+     * <p>The test is whether the distance from the sphere's center to the solid
+     * cylinder is at most the sphere's radius. Note that this is <em>not</em>
+     * the same as testing the center against a cylinder grown by the sphere's
+     * radius: growing a finite cylinder rounds off its rim, so that test would
+     * report an overlap for a sphere near the rim that in fact misses. See
+     * {@link #distanceTo} for how the rim is accounted for.
+     *
+     * <p>A degenerate cylinder (coincident endpoints) is empty and overlaps
+     * nothing, consistent with {@link #contains}.
+     *
+     * @throws IllegalArgumentException if the sphere's radius is negative, NaN,
+     *     or infinite
+     */
+    public boolean intersectsSphere(Vec3 center, double sphereRadius) {
+        requireRadius(sphereRadius);
+        // The containment test short circuits the distance computation, so that
+        // a center exactly on the surface agrees with contains() rather than
+        // depending on how the square roots in distanceTo() round.
+        return contains(center) || distanceTo(center) <= sphereRadius;
+    }
+
+    /**
+     * Returns true if the sphere with the given center and radius overlaps the
+     * capsule with this cylinder's axis and radius.
+     *
+     * <p>Unlike the cylinder case this really is a grown point test: a capsule
+     * has no rim, and growing it by the sphere's radius yields a capsule with
+     * the same axis and a larger radius. So the test reduces to whether the
+     * center is within {@code radius + sphereRadius} of the axis segment.
+     *
+     * @throws IllegalArgumentException if the sphere's radius is negative, NaN,
+     *     or infinite
+     */
+    public boolean intersectsSphereAsCapsule(Vec3 center, double sphereRadius) {
+        requireRadius(sphereRadius);
+        double combined = radius + sphereRadius;
+        return center.distanceSquared(closestPointOnAxisSegment(center))
+                <= combined * combined;
+    }
+
+    /**
+     * Returns the distance from {@code q} to the nearest point of this solid
+     * cylinder, or zero if {@code q} is inside it or on its surface.
+     *
+     * <p>Describe {@code q} by its distance along the axis and its
+     * perpendicular distance from the axis line. In those two coordinates the
+     * cylinder is the rectangle {@code [0, height] x [0, radius]}, and the
+     * distance from a point to a rectangle is found by measuring the excess
+     * beyond each side independently and combining them:
+     *
+     * <pre>
+     *   axial   = max(0, -along, along - height)
+     *   radial  = max(0, perpendicular - radius)
+     *   result  = hypot(axial, radial)
+     * </pre>
+     *
+     * <p>This is exact in 3D, not an approximation in 2D, because the nearest
+     * point of the cylinder always lies in the plane spanned by the axis and
+     * {@code q}. Both terms being nonzero is the rim case: the nearest point is
+     * then the circle where an end cap meets the lateral surface, and combining
+     * the two excesses is what accounts for it. Taking whichever excess is
+     * larger, or testing the two independently, would understate the distance
+     * near the rim.
+     *
+     * <p>A degenerate cylinder (coincident endpoints) is empty, and the
+     * distance to an empty set is infinite.
+     */
+    public double distanceTo(Vec3 q) {
+        Vec3 axis = axis();
+        double axisLengthSquared = axis.lengthSquared();
+        if (axisLengthSquared == 0.0) {
+            return Double.POSITIVE_INFINITY;
+        }
+        double axisLength = Math.sqrt(axisLengthSquared);
+
+        Vec3 d = q.minus(p1);
+        double along = d.dot(axis) / axisLength;
+        double perpendicular = Math.sqrt(d.cross(axis).lengthSquared()) / axisLength;
+
+        double axialExcess = Math.max(0.0, Math.max(-along, along - axisLength));
+        double radialExcess = Math.max(0.0, perpendicular - radius);
+        return Math.hypot(axialExcess, radialExcess);
+    }
+
+    /**
+     * Returns the distance from {@code q} to the nearest point of the capsule
+     * with this cylinder's axis and radius, or zero if {@code q} is inside it
+     * or on its surface.
+     */
+    public double distanceToAsCapsule(Vec3 q) {
+        return Math.max(0.0, q.distance(closestPointOnAxisSegment(q)) - radius);
     }
 
     /**

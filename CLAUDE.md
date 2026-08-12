@@ -33,10 +33,12 @@ invariant is violated.
 Three files in `src/geom`, plus the test data in `test/cases.txt`:
 
 - `Vec3` — immutable record, a 3D point or vector, with the vector operations.
-- `Cylinder` — record of `(p1, p2, radius)`. Holds both shapes: `contains` is
-  the cylinder (flat end caps), `containsAsCapsule` is the capsule
-  (hemispherical end caps). One type serves both because they share the same
-  three parameters and differ only in the containment test.
+- `Cylinder` — record of `(p1, p2, radius)`. Holds both shapes: `contains` and
+  `intersectsSphere` are the cylinder (flat end caps), `containsAsCapsule` and
+  `intersectsSphereAsCapsule` are the capsule (hemispherical end caps). One
+  type serves both because they share the same three parameters and differ only
+  in the tests. Methods come in cylinder/capsule pairs; keep that pairing when
+  adding to the API.
 - `ContainmentTestRunner` — `main` that reads cases with known answers from a
   text file and compares them against both methods.
 
@@ -52,6 +54,18 @@ comments in `Cylinder` explain why; preserve this if you touch the math:
 - `containsAsCapsule` is a single distance comparison against the closest point
   on the axis segment, since a capsule is exactly the set of points within
   `radius` of that segment.
+- `intersectsSphere` asks whether `distanceTo` the solid is at most the sphere's
+  radius. `distanceTo` treats the cylinder as a rectangle in (along, perpendicular)
+  coordinates and combines the excess beyond each side with `hypot`. **Do not
+  "simplify" this to the larger of the two excesses, and do not reimplement the
+  sphere test as a point test against a cylinder grown by the sphere radius.**
+  Both are wrong at the rim, which is where the nearest point of a finite
+  cylinder often is; `test/cases.txt` has cases that fail under either.
+- `intersectsSphere` short circuits on `contains` before measuring, so a center
+  exactly on the surface agrees with `contains` rather than depending on how the
+  square roots in `distanceTo` round. `intersectsSphereAsCapsule` needs no such
+  guard: its expression reduces to `containsAsCapsule` when the sphere radius is
+  zero.
 
 Both shapes are closed: a point on the surface is contained, and the cases file
 pins boundary behavior with points placed exactly on surfaces using values that
@@ -66,15 +80,22 @@ for the capsule.
 ## Test data
 
 `test/cases.txt` is the source of truth for expected behavior. Format, one case
-per line, `#` comments and blank lines ignored:
+per line, `#` comments and blank lines ignored; the leading keyword determines
+the field count:
 
 ```
-shape   x1 y1 z1   x2 y2 z2   radius   qx qy qz   expected
+CYLINDER         x1 y1 z1  x2 y2 z2  radius  qx qy qz                expected
+CAPSULE          x1 y1 z1  x2 y2 z2  radius  qx qy qz                expected
+CYLINDER_SPHERE  x1 y1 z1  x2 y2 z2  radius  cx cy cz  sphereRadius  expected
+CAPSULE_SPHERE   x1 y1 z1  x2 y2 z2  radius  cx cy cz  sphereRadius  expected
 ```
 
-`shape` is `CYLINDER` or `CAPSULE`; `expected` is `IN` or `OUT`. When adding
-behavior, add cases here rather than writing a separate harness.
+`expected` is `IN`/`OUT` for a point and `HIT`/`MISS` for a sphere. When adding
+behavior, add a keyword and cases here rather than writing a separate harness;
+`Shape` in the runner carries each keyword's field count.
 
-Independently of the expected answers, the runner asserts on every case that a
-point inside the cylinder is inside the capsule. Any new geometry code should
-keep that implication true.
+Independently of the expected answers, `ContainmentTestRunner.checkInvariants`
+asserts on every case that the methods agree with each other: the capsule
+contains the cylinder, a zero radius sphere matches the point test, and growing
+a sphere that hits cannot make it miss. New geometry code should keep those
+true, and new relationships belong there.
