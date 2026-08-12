@@ -1,4 +1,4 @@
-# 3D Capsule Intersection
+# 3D Capsule Collision
 
 Determines whether a 3D point lies within the volume of a **capsule**
 (spherocylinder) of arbitrary orientation, and whether a sphere overlaps one.
