@@ -1,26 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Commands
-
-```
-make            # compile src/ to out/ with -Xlint:all
-make test       # compile, then run test/cases.txt
-make clean
-```
-
-To run a different or reduced set of cases, pass files to the runner directly;
-it accepts any number of paths, which is the way to run a single case in
-isolation (copy the line into a scratch file):
-
-```
-java -cp out geom.CapsuleTestRunner path/to/other-cases.txt
-```
-
-The runner exits nonzero if any case fails, any line is unparseable, or any
-invariant is violated.
-
 ## Constraints
 
 - **JDK only, no dependencies.** No Maven or Gradle, no JUnit, no third-party
@@ -30,17 +9,9 @@ invariant is violated.
 
 ## Architecture
 
-Four files in `src/geom`, plus the test data in `test/cases.txt`:
-
-- `Vec3` — immutable record, a 3D point or vector, with the vector operations.
-- `Capsule` — record of `(p1, p2, radius)`. `contains` tests a point,
-  `intersects` tests a `Sphere`.
-- `Sphere` — record of `(center, radius)`. A pure data type on purpose: it
-  validates and nothing else. Resist adding `Sphere.contains`,
-  `Sphere.intersects(Sphere)`, or a `Segment` type; that is a general geometry
-  library and a different project.
-- `CapsuleTestRunner` — `main` that reads cases with known answers from a text
-  file and compares them against both methods.
+`Sphere` is a pure data type on purpose: it validates and nothing else. Resist
+adding `Sphere.contains`, `Sphere.intersects(Sphere)`, or a `Segment` type; that
+is a general geometry library and a different project.
 
 The shape is a **capsule** (spherocylinder), not a cylinder: it is every point
 within `radius` of the axis *segment*, so its ends are hemispheres rather than
@@ -105,18 +76,10 @@ cylinder.
 
 ## Test data
 
-`test/cases.txt` is the source of truth for expected behavior. Format, one case
-per line, `#` comments and blank lines ignored; the leading keyword names what
-is being tested and determines the field count:
-
-```
-POINT    x1 y1 z1  x2 y2 z2  radius  qx qy qz                expected
-SPHERE   x1 y1 z1  x2 y2 z2  radius  cx cy cz  sphereRadius  expected
-```
-
-`expected` is `IN`/`OUT` for a point and `HIT`/`MISS` for a sphere. When adding
-behavior, add a keyword and cases here rather than writing a separate harness;
-`Query` in the runner carries each keyword's field count.
+`test/cases.txt` is the source of truth for expected behavior; its own comment
+header documents the line format. When adding behavior, add a keyword and cases
+here rather than writing a separate harness; `Query` in the runner carries each
+keyword's field count.
 
 Boundary cases use values exactly representable in binary floating point, so
 that `IN` on a surface is not a coin flip on rounding. Keep new boundary cases
