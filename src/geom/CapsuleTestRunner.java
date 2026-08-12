@@ -159,24 +159,33 @@ public final class CapsuleTestRunner {
 
         boolean contains = capsule.contains(q);
         boolean hits = capsule.intersectsSphere(q, r);
+        double segmentSquared = capsule.distanceSquaredToAxisSegment(q);
+        double capsuleRadius = capsule.radius();
+        double combined = capsuleRadius + r;
 
         int violations = 0;
+        // Both tests are a squared comparison against the segment distance, so
+        // these hold exactly rather than to within a rounding tolerance.
+        violations += check(file, c,
+                contains == (segmentSquared <= capsuleRadius * capsuleRadius),
+                "the point test disagrees with the squared distance to the segment");
+        violations += check(file, c, hits == (segmentSquared <= combined * combined),
+                "the sphere test disagrees with the squared distance to the segment");
         // A point test is the radius zero case of the sphere test.
         violations += check(file, c, capsule.intersectsSphere(q, 0.0) == contains,
                 "a zero radius sphere disagrees with the point test");
         // Growing a sphere that already touches cannot make it miss.
         violations += check(file, c, !hits || capsule.intersectsSphere(q, r + 1.0),
                 "growing a sphere that hits makes it miss");
-        // The measured distance and the two tests must tell the same story.
+        // A contained point is at distance zero, and a sphere reaching past the
+        // measured distance must hit, which rules out the distance being an
+        // overestimate. This last one keeps a slack that the squared invariants
+        // above do not need: distanceTo() takes a square root while the tests
+        // compare squared distances, and at exact tangency the two need not
+        // agree on the last bit. That is inherent to relating the two, not
+        // something the squared accessor can remove.
         violations += check(file, c, !contains || capsule.distanceTo(q) == 0.0,
                 "a contained point has a nonzero distance to the capsule");
-        violations += check(file, c, capsule.distanceTo(q) > r || hits,
-                "the distance is within the sphere radius but the sphere misses");
-        // A sphere reaching past the measured distance must hit, which is what
-        // rules out the distance being an overestimate. The slack absorbs the
-        // half ulp lost to the square root: distanceTo() takes one while
-        // intersectsSphere() compares squared distances, so at exact tangency
-        // the two need not agree on the last bit.
         double reach = capsule.distanceTo(q) * (1.0 + 1e-12) + 1e-12;
         violations += check(file, c, capsule.intersectsSphere(q, reach),
                 "a sphere reaching past the measured distance misses");

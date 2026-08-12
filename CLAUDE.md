@@ -45,14 +45,23 @@ deliberate narrowing; git history has an earlier version supporting both shapes
 if flat ends are ever needed again.
 
 Defining the capsule by distance to the segment is what keeps this small, and
-every method reduces to `closestPointOnAxisSegment`:
+every method reduces to `distanceSquaredToAxisSegment`, which is the class's
+square-root-free primitive:
 
-- `contains` compares that distance to `radius`, squared on both sides to avoid
-  a square root. Keep it squared — it is exact for points placed on the surface
-  by construction, which is what lets the cases file assert boundary behavior.
-- `intersectsSphere` is the same comparison against `radius + sphereRadius`.
+- `contains` compares it against `radius * radius`.
+- `intersectsSphere` compares it against `(radius + sphereRadius)` squared.
   Growing a capsule by a radius yields a capsule, so no separate geometry is
   needed, and the two methods agree exactly at `sphereRadius == 0`.
+
+Keep both comparisons squared — they are exact for points placed on the surface
+by construction, which is what lets the cases file assert boundary behavior.
+
+`distanceTo` is the one method that must take a square root, and it cannot be
+converted to a squared form: the distance to the capsule is `d - radius`, and
+`(d - radius)^2` needs `d` rather than `d^2`, so a `distanceSquaredTo` would
+take the same root and then square the result. That is why the sqrt-free
+accessor is offered on the segment instead of on the capsule. Callers ordering
+or thresholding distances should use it and pre-square their threshold.
 
 There is no end-plane test, no rim case, and no orientation needed for a
 zero-length axis. If you find yourself adding one, you are reintroducing a
@@ -69,10 +78,11 @@ cylinder.
   only to avoid dividing zero by zero, not to implement a special case. An axis
   shorter than the radius is legal too, giving a nearly spherical capsule.
 - `CapsuleTestRunner.checkInvariants` asserts on every case that the methods
-  agree with each other. New relationships belong there. Note that any invariant
-  relating `distanceTo` to the containment tests needs slack: `distanceTo` takes
-  a square root while the tests compare squared distances, so at exact tangency
-  they need not agree on the last bit.
+  agree with each other. New relationships belong there. Invariants phrased on
+  `distanceSquaredToAxisSegment` are exact, since that is what the tests
+  compare; any invariant relating `distanceTo` to them still needs slack,
+  because it takes a square root while they compare squared distances, so at
+  exact tangency the two need not agree on the last bit.
 
 ## Test data
 

@@ -65,7 +65,7 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
      * the comparison exact for a point placed on the surface by construction.
      */
     public boolean contains(Vec3 q) {
-        return q.distanceSquared(closestPointOnAxisSegment(q)) <= radius * radius;
+        return distanceSquaredToAxisSegment(q) <= radius * radius;
     }
 
     /**
@@ -90,16 +90,40 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
                     "sphere radius must be finite and non-negative: " + sphereRadius);
         }
         double combined = radius + sphereRadius;
-        return center.distanceSquared(closestPointOnAxisSegment(center))
-                <= combined * combined;
+        return distanceSquaredToAxisSegment(center) <= combined * combined;
+    }
+
+    /**
+     * Returns the squared distance from {@code q} to the closest point on the
+     * axis segment, which is the quantity both {@link #contains} and
+     * {@link #intersectsSphere} are built on.
+     *
+     * <p>This is the square root free primitive of the class. Comparing it
+     * against a squared threshold is exact where the corresponding comparison
+     * on distances would round, so prefer it wherever a caller is only ordering
+     * or thresholding distances, such as ranking capsules by proximity: square
+     * the threshold once rather than taking a root per query.
+     *
+     * <p>Note that this measures to the axis <em>segment</em>, not to the
+     * capsule's surface. Subtracting the radius is what turns it into a
+     * distance to the capsule, and that subtraction cannot be done under the
+     * square, since {@code (d - radius)^2} needs {@code d} itself and not
+     * {@code d^2}. That is why {@link #distanceTo} exists as a distance rather
+     * than a squared one: it has to take the root.
+     */
+    public double distanceSquaredToAxisSegment(Vec3 q) {
+        return q.distanceSquared(closestPointOnAxisSegment(q));
     }
 
     /**
      * Returns the distance from {@code q} to the nearest point of this capsule,
      * or zero if {@code q} is inside it or on its surface.
+     *
+     * <p>Callers who only need to compare or threshold this should use
+     * {@link #distanceSquaredToAxisSegment} instead and avoid the square root.
      */
     public double distanceTo(Vec3 q) {
-        return Math.max(0.0, q.distance(closestPointOnAxisSegment(q)) - radius);
+        return Math.max(0.0, Math.sqrt(distanceSquaredToAxisSegment(q)) - radius);
     }
 
     /**

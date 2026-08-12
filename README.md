@@ -26,8 +26,12 @@ capsule.intersectsSphere(new Vec3(2.5, 4.0, 7.0), 0.5);  // sphere overlapping?
 ```
 
 There is also a constructor taking seven raw coordinates, and supporting
-queries: `distanceTo` (distance from a point to the capsule, zero inside),
-`closestPointOnAxisSegment`, `axis`, and `height`.
+queries: `distanceSquaredToAxisSegment`, `distanceTo` (distance from a point to
+the capsule, zero inside), `closestPointOnAxisSegment`, `axis`, and `height`.
+
+For ordering or thresholding distances — ranking capsules by proximity, testing
+against a cutoff — use `distanceSquaredToAxisSegment` and square the threshold
+once, rather than taking a square root per query.
 
 ## Building and testing
 
@@ -72,22 +76,32 @@ than the radius, and coincident endpoints.
 
 The runner additionally checks relationships that hold for any geometry
 regardless of the expected answers, so they catch errors the listed cases might
-miss: a zero radius sphere agrees with the point test, growing a sphere that
-already hits cannot make it miss, a contained point is at distance zero, and a
-sphere reaching the measured distance does hit.
+miss: both tests agree with a squared comparison against
+`distanceSquaredToAxisSegment`, a zero radius sphere agrees with the point test,
+growing a sphere that already hits cannot make it miss, a contained point is at
+distance zero, and a sphere reaching the measured distance does hit.
 
 ## How it works
 
-Every method reduces to the distance from a query point to the axis segment,
-found by projecting onto the axis and clamping the parameter to `[0, 1]`:
+Every method reduces to `distanceSquaredToAxisSegment`, the squared distance
+from a query point to the axis segment, found by projecting onto the axis and
+clamping the parameter to `[0, 1]`:
 
-- **Point containment** is that distance against `radius`, compared squared to
-  avoid a square root. Squaring also makes the comparison exact for a point
-  placed on the surface by construction, which is what lets the cases file pin
-  boundary behavior.
-- **Sphere intersection** is the same test against `radius + sphereRadius`.
+- **Point containment** compares it against `radius²`.
+- **Sphere intersection** compares it against `(radius + sphereRadius)²`.
   Growing a capsule by the sphere's radius yields a capsule with the same axis
   and a larger radius, so the two agree exactly when the sphere's radius is zero.
+
+Both are squared comparisons, so neither takes a square root, and both are exact
+for a point placed on the surface by construction — which is what lets the cases
+file pin boundary behavior.
+
+`distanceTo` is the exception that must take a root. The distance to the capsule
+is `d - radius`, and that subtraction cannot happen under the square, since
+`(d - radius)² = d² - 2·radius·d + radius²` needs `d` itself and not `d²`. A
+squared variant of it would therefore compute the same square root and then
+square the result, which is why the sqrt-free accessor is offered one step
+earlier, on the segment, instead.
 
 There is no end-plane test, no rim where a cap meets a lateral surface, and no
 axis direction needed when the endpoints coincide. Those are all cylinder
