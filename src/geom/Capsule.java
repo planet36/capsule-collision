@@ -61,6 +61,62 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
     }
 
     /**
+     * Returns the corner of this capsule's axis-aligned bounding box with the
+     * smallest coordinates. See {@link #maxCorner} for the box as a whole.
+     */
+    public Vec3 minCorner() {
+        return new Vec3(Math.min(p1.x(), p2.x()) - radius,
+                        Math.min(p1.y(), p2.y()) - radius,
+                        Math.min(p1.z(), p2.z()) - radius);
+    }
+
+    /**
+     * Returns the corner of this capsule's axis-aligned bounding box with the
+     * largest coordinates. With {@link #minCorner} this is the smallest box
+     * containing the capsule whose faces are perpendicular to the coordinate
+     * axes, which is the usual broad phase bound: two boxes overlap exactly
+     * when their intervals overlap on all three axes, so a cheap rejection is
+     * six comparisons and no arithmetic.
+     *
+     * <p>The box is the one around the axis segment with every face pushed out
+     * by {@code radius}, which is exact rather than an estimate. A capsule is
+     * the segment fattened by {@code radius} in every direction, so its extreme
+     * point along {@code +x} is the endpoint of greatest {@code x} offset by
+     * {@code radius} along that axis, and that point lies on the capsule. Each
+     * face therefore touches the shape and none can be brought in.
+     *
+     * <p>Unlike a bounding sphere this needs no square root and no division,
+     * and it is far tighter on the long thin capsules that motivate the shape:
+     * for the million-to-one capsule in the cases file the box has about 1.3
+     * times the capsule's volume where a sphere would have 10^17 times it. The
+     * tradeoff is that it is not rotation invariant. A bounding sphere is
+     * unchanged by rotating the capsule, while this box must be recomputed,
+     * and a capsule lying along a diagonal gets a looser box than one lying
+     * along an axis.
+     *
+     * <p>This is the one query that does not reduce to
+     * {@link #distanceSquaredToAxisSegment}, so it is worth being exact about
+     * what it guarantees. The box contains the capsule as a solid: rounding
+     * {@code max + radius} to nearest moves a face by at most half a step, and
+     * the next representable coordinate beyond it is a full step away, so no
+     * {@code double} can fall in the gap.
+     *
+     * <p>It does not follow that {@link #contains} implies the box contains the
+     * point, and nothing asserts that. {@code contains} is not an exact oracle
+     * at its own boundary: its squared comparison accepts points a few ulps
+     * outside the true surface, and a few of those lie outside the box.
+     * Fuzzing finds them only within three ulps of a face, never at the
+     * computed extreme point and never at a randomly chosen one. Callers doing
+     * a broad phase are unaffected, since a box that admits one extra ulp of
+     * candidates only costs them a narrow phase test that then answers no.
+     */
+    public Vec3 maxCorner() {
+        return new Vec3(Math.max(p1.x(), p2.x()) + radius,
+                        Math.max(p1.y(), p2.y()) + radius,
+                        Math.max(p1.z(), p2.z()) + radius);
+    }
+
+    /**
      * Returns true if {@code q} lies inside or on the surface of this capsule.
      *
      * <p>This is one distance comparison against the closest point on the axis

@@ -32,7 +32,8 @@ coordinates and a radius.
 
 `Capsule` also has a constructor taking seven raw coordinates, and supporting
 queries: `distanceSquaredToAxisSegment`, `distanceTo` (distance from a point to
-the capsule, zero inside), `closestPointOnAxisSegment`, and `axis`.
+the capsule, zero inside), `closestPointOnAxisSegment`, `axis`, and
+`minCorner`/`maxCorner` for the bounding box.
 
 For ordering or thresholding distances — ranking capsules by proximity, testing
 against a cutoff — use `distanceSquaredToAxisSegment` and square the threshold
@@ -145,7 +146,8 @@ regardless of the expected answers, so they catch errors the listed cases might
 miss: both tests agree with a squared comparison against
 `distanceSquaredToAxisSegment`, a zero radius sphere agrees with the point test,
 growing a sphere that already hits cannot make it miss, a contained point is at
-distance zero, and `distanceTo` is the segment distance less the radius.
+distance zero, `distanceTo` is the segment distance less the radius, and the
+bounding box is the segment's box grown by the radius.
 
 Every one of those holds exactly. There is no tolerance or epsilon constant
 anywhere in this project, in the library or the tests: the containment and
@@ -177,6 +179,48 @@ earlier, on the segment, instead.
 There is no end-plane test, no rim where a cap meets a lateral surface, and no
 axis direction needed when the endpoints coincide. Those are all cylinder
 problems, and a capsule has none of them.
+
+## The bounding box
+
+`minCorner` and `maxCorner` give the axis-aligned bounding box: the smallest box
+containing the capsule whose faces are perpendicular to the coordinate axes. It
+is the box around the axis segment with every face pushed out by `radius`, since
+a capsule is the segment fattened by `radius` in every direction:
+
+```java
+Vec3 lo = capsule.minCorner();   // (min(p1,p2) - radius) per component
+Vec3 hi = capsule.maxCorner();   // (max(p1,p2) + radius) per component
+```
+
+This is the usual broad-phase bound. Two boxes overlap exactly when their
+intervals overlap on all three axes, so rejecting a pair is six comparisons and
+no arithmetic, and the box needs no square root and no division to build.
+
+It is also a far better bound than a sphere for the long thin capsules that
+motivate the shape, since a bounding sphere has to swallow the whole length in
+every direction:
+
+| capsule | box vs capsule volume | sphere vs capsule volume |
+| --- | --- | --- |
+| `0,0,0–0,0,0.5` r=5 (short, fat) | 1.87× | 1.08× |
+| `0,0,0–0,0,10` r=2 (typical) | 1.41× | 9.03× |
+| `0,0,0–1e6,0,0` r=0.001 (thin) | 1.27× | 1.7 × 10¹⁷× |
+
+The first row is worth noticing: for a capsule so short and fat that it is
+nearly a sphere, the bounding sphere is the better bound and the box is the
+loose one. The box wins everywhere else, and wins by a margin that grows without
+limit as the capsule gets longer and thinner — which is the regime a capsule is
+for. A sphere is also rotation invariant, so it survives tumbling the shape
+while the box must be rebuilt, and a capsule lying along a diagonal gets a
+looser box than one lying along an axis. Those two are the whole case for the
+sphere, and neither was enough to add it here.
+
+The box contains the capsule as a solid. It does not follow that every point
+`contains` accepts is inside the box — `contains` is not an exact oracle at its
+own boundary, and admits points a few ulps past the true surface — so the tests
+assert the box by its definition rather than by that round trip. For a broad
+phase this is immaterial: an extra ulp of candidates costs one narrow-phase test
+that then answers no.
 
 ## Conventions
 

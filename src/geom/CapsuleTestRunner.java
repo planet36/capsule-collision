@@ -287,6 +287,34 @@ public final class CapsuleTestRunner {
                 capsule.distanceTo(q)
                         == Math.max(0.0, Math.sqrt(segmentSquared) - capsuleRadius),
                 "distanceTo disagrees with the segment distance less the radius");
+
+        // The bounding box is the segment's own box with every face pushed out
+        // by the radius. Asserting the definition catches a reformulation that
+        // changes the result, including the two obvious ways to get it wrong:
+        // omitting the radius, or transposing min and max.
+        //
+        // There is deliberately no invariant of the form "a contained point
+        // lies inside the box". It reads like the one property a bound must
+        // have, and it is true of the capsule as a solid, but it is not true of
+        // contains(), which is not an exact oracle at its own boundary: its
+        // squared comparison accepts points a few ulps outside the true
+        // surface, and some of those fall outside the box. Fuzzing puts them
+        // within three ulps of a face — never at the computed extreme, never at
+        // a random point — so the assertion would pass here and fail later.
+        // That is a claim about two roundings agreeing, not about geometry, and
+        // no fixed slack fixes it. See Capsule.maxCorner.
+        Vec3 lo = capsule.minCorner();
+        Vec3 hi = capsule.maxCorner();
+        Vec3 p1 = capsule.p1();
+        Vec3 p2 = capsule.p2();
+        violations += check(file, c,
+                lo.equals(new Vec3(Math.min(p1.x(), p2.x()) - capsuleRadius,
+                                   Math.min(p1.y(), p2.y()) - capsuleRadius,
+                                   Math.min(p1.z(), p2.z()) - capsuleRadius))
+                        && hi.equals(new Vec3(Math.max(p1.x(), p2.x()) + capsuleRadius,
+                                              Math.max(p1.y(), p2.y()) + capsuleRadius,
+                                              Math.max(p1.z(), p2.z()) + capsuleRadius)),
+                "the bounding box is not the segment's box grown by the radius");
         return violations;
     }
 

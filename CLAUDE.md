@@ -20,8 +20,9 @@ deliberate narrowing; git history has an earlier version supporting both shapes
 if flat ends are ever needed again.
 
 Defining the capsule by distance to the segment is what keeps this small, and
-every method reduces to `distanceSquaredToAxisSegment`, which is the class's
-square-root-free primitive:
+every method except `minCorner`/`maxCorner` reduces to
+`distanceSquaredToAxisSegment`, which is the class's square-root-free
+primitive:
 
 - `contains` compares it against `radius * radius`.
 - `intersects` compares it against `(radius + sphere.radius())` squared.
@@ -41,6 +42,20 @@ or thresholding distances should use it and pre-square their threshold.
 There is no end-plane test, no rim case, and no orientation needed for a
 zero-length axis. If you find yourself adding one, you are reintroducing a
 cylinder.
+
+`minCorner` and `maxCorner` are the one exception to the reduction above: the
+axis-aligned bounding box, for use as a broad phase bound. It is the segment's
+own box with every face pushed out by `radius`, which is exact and needs no
+square root and no division, and it is the *only* bound this class should grow.
+
+A bounding sphere was considered and rejected. It is `|axis|/2 + radius`
+centered on the axis midpoint, which is correct and minimal, but: it would be a
+second square root; it is one line a caller can already write from `axis()` and
+`radius()`; and it is a terrible bound for the long thin capsules that motivate
+the shape — 10^17 times the volume of the million-to-one capsule in the cases
+file, against about 1.3 times for the box. Do not add it back without a caller
+that specifically needs a rotation-invariant bound, which is the one thing the
+box is not.
 
 ## Invariants and validation
 
@@ -81,6 +96,19 @@ cylinder.
   near the query point it is unbounded when measured in ulps of the distance.
   Phrase invariants on `distanceSquaredToAxisSegment` instead, which is what
   the tests actually compare, or assert a method's definition directly.
+
+  The second one to avoid is "a contained point lies inside the bounding box".
+  It looks like the one property a bound must have, and it is true of the
+  capsule as a solid, but `contains` is not an exact oracle at its own
+  boundary: its squared comparison accepts points a few ulps outside the true
+  surface, and some of those fall outside the box. Fuzzing puts them within
+  three ulps of a face — never at the computed extreme, never at a random
+  point — so the assertion passes the current cases and would fail later on
+  inputs nobody has tried. It is the same round-trip-through-rounding mistake
+  wearing different clothes. `minCorner`/`maxCorner` are asserted by their
+  definition instead, which catches both ways of getting them wrong (omitting
+  the radius, transposing min and max) — verified by mutation, 103 and 28
+  violations respectively.
 
   Do not solve this by adding a tolerance parameter to `intersects`. That
   would export a harness problem into the public API and change the method's
