@@ -11,7 +11,7 @@
 #
 #   x1..z1         one end of the capsule's axis
 #   x2..z2         the other end of the capsule's axis
-#   radius         radius of the capsule, which must be positive
+#   radius         radius of the capsule, which may be zero but not negative
 #   qx..qz         the point being tested
 #   cx..cz         center of the sphere being tested
 #   sphereRadius   radius of the sphere being tested, which may be zero
@@ -144,6 +144,35 @@ POINT   1 1 1    1 1 1    2    1 1 3          IN    # on the sphere surface
 POINT   1 1 1    1 1 1    2    1 1 3.5        OUT   # outside the sphere
 POINT   1 1 1    1 1 1    2    2.5 2.5 2.5    OUT   # outside the sphere, diagonally
 
+# ---------------------------------------------------------------------------
+# Zero radius: the capsule is the bare axis segment, the limiting case at the
+# other end of the radius from the short and fat capsule above. It is legal,
+# but unlike the cases above it has no interior — the shape is all surface, so
+# a point is IN only where the closest point on the segment reproduces it
+# exactly. Every point below is chosen so that it does, which is why they are
+# all simple binary fractions of the way along an axis aligned segment.
+#
+# Do not read these as a promise that contains() finds points on a segment in
+# general: for a mathematically on-segment point it holds about five times in
+# six for these axes and only two in three for an oblique one, and the failures
+# are rounding in p1 + axis*t rather than geometry. Capsule.contains documents
+# this and steers such callers to distanceSquaredToAxisSegment. The SPHERE
+# cases below are the well conditioned way to query this shape.
+# ---------------------------------------------------------------------------
+
+POINT   0 0 0    0 0 10    0      0 0 0        IN    # an endpoint
+POINT   0 0 0    0 0 10    0      0 0 10       IN    # the other endpoint
+POINT   0 0 0    0 0 10    0      0 0 5        IN    # the midpoint
+POINT   0 0 0    0 0 10    0      0 0 2.5      IN    # a quarter of the way along
+POINT   0 0 0    0 0 10   -0.0    0 0 5        IN    # negative zero is zero
+POINT   0 0 0    0 0 10    0      0.5 0 5      OUT   # off the segment, distance 0.5
+POINT   0 0 0    0 0 10    0      0 0 -0.5     OUT   # past an endpoint; there is no cap
+POINT   0 0 0    0 0 10    0      0 0 10.5     OUT   # past the other endpoint
+
+# Coincident endpoints as well, so the capsule is a single point
+POINT   1 2 3    1 2 3     0      1 2 3        IN    # the point itself
+POINT   1 2 3    1 2 3     0      1 2 4        OUT   # a unit away
+
 
 # ===========================================================================
 # Sphere intersection. The last number before the answer is the radius of the
@@ -199,25 +228,36 @@ SPHERE  1 1 1   1 1 1    2    1 1 5        1.9     MISS
 SPHERE  1 1 1   1 1 1    2    1 1 5        3       HIT
 SPHERE  1 1 1   1 1 1    2    1 1 1        0       HIT   # a point at the center
 
+# Zero radius: a sphere against the bare axis segment. Unlike the point test
+# above this is well conditioned, because the sphere's radius leaves room on
+# both sides of the comparison, so tangency is exact for the usual reason.
+SPHERE  0 0 0   0 0 10    0    0 0 5        1       HIT   # the segment runs through it
+SPHERE  0 0 0   0 0 10    0    3 0 5        3       HIT   # exactly touching, radially
+SPHERE  0 0 0   0 0 10    0    3 0 5        2.9     MISS
+SPHERE  0 0 0   0 0 10    0    0 0 14       4       HIT   # exactly touching an endpoint
+SPHERE  0 0 0   0 0 10    0    0 0 14       3.9     MISS
+SPHERE  0 0 0   0 0 10    0    0 0 -3       3       HIT   # exactly touching the other
+SPHERE  0 0 0   0 0 10    0    0 0 -3       2.9     MISS
+SPHERE  0 0 0   0 0 10    0    0 0 5        0       HIT   # a point on the segment
+SPHERE  0 0 0   0 0 10    0    0.5 0 5      0       MISS  # a point off it
+
 
 # ===========================================================================
 # Validation.
 #
-# These assert what the constructors reject. The rule is asymmetric on purpose:
-# a capsule's radius must be positive, because a zero radius capsule is a bare
-# segment rather than a solid, while a sphere's radius may be zero, since that
-# is a point and querying with one is meaningful. Neither may be NaN or
-# infinite, and no coordinate may be either.
+# These assert what the constructors reject. Both shapes have the same rule:
+# a radius may be zero — a zero radius sphere is a point and a zero radius
+# capsule is its axis segment, and both are meaningful to query — but may not
+# be negative, NaN, or infinite, and no coordinate may be NaN or infinite.
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
-# A capsule's radius must be positive. The sphere on each line is the query
+# A capsule's radius may not be negative. The sphere on each line is the query
 # point at radius zero, which is always legal, so the capsule is what is being
-# rejected.
+# rejected. For the zero radius capsule, which is legal, see the cases above.
 # ---------------------------------------------------------------------------
-POINT   0 0 0    0 0 10    0          0 0 5    INVALID  # zero is a segment, not a solid
-POINT   0 0 0    0 0 10   -0.0        0 0 5    INVALID  # negative zero is still zero
 POINT   0 0 0    0 0 10   -1          0 0 5    INVALID  # negative
+POINT   0 0 0    0 0 10   -1e-300     0 0 5    INVALID  # negative, however small
 POINT   0 0 0    0 0 10    NaN        0 0 5    INVALID
 POINT   0 0 0    0 0 10    Infinity   0 0 5    INVALID
 POINT   0 0 0    0 0 10   -Infinity   0 0 5    INVALID
@@ -236,7 +276,7 @@ POINT   Infinity 0 0   0 0 10        2    0 0 5    INVALID
 POINT   0 0 0          0 -Infinity 0 2    0 0 5    INVALID
 
 # ---------------------------------------------------------------------------
-# A sphere's radius may be zero, unlike a capsule's, but not negative. The
+# A sphere's radius may be zero, as a capsule's may, but not negative. The
 # capsule on each line is legal, so the sphere is what is being rejected.
 # ---------------------------------------------------------------------------
 SPHERE  0 0 0    0 0 10   2    0 0 5    0          HIT      # zero is a point query

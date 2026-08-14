@@ -39,9 +39,9 @@ import java.util.List;
  *
  * <p>Either kind of line may instead expect {@code INVALID}, which asserts that
  * the shapes it describes are illegal and that a constructor rejects them. Such
- * a line runs no query, and is how the validation rules are tested: that a
- * capsule's radius must be positive while a sphere's need only be
- * non-negative, and that neither may be NaN or infinite.
+ * a line runs no query, and is how the validation rules are tested: that
+ * neither radius may be negative, NaN, or infinite, and that no coordinate may
+ * be NaN or infinite either.
  *
  * <p>Beyond the declared answers, every case is also checked against the
  * relationships that must hold between the methods for any geometry. See

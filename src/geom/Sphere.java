@@ -9,10 +9,9 @@ package geom;
  * <p>The radius may be zero, in which case the sphere is a single point.
  * Testing a capsule against such a sphere is the same question as testing it
  * against that point, and {@link Capsule#intersects} and
- * {@link Capsule#contains} agree exactly in that case. This differs from a
- * capsule's own radius, which must be positive: a zero radius capsule would be
- * a bare segment rather than a solid, while a zero radius sphere is a
- * legitimate and useful query.
+ * {@link Capsule#contains} agree exactly in that case. A capsule's radius may
+ * likewise be zero, giving the bare axis segment; the two shapes have the same
+ * rule, and only a negative, NaN, or infinite radius is rejected.
  *
  * <p>Like the other shapes here this is a closed set, so a point exactly on the
  * surface is inside it.

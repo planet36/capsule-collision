@@ -19,12 +19,20 @@ package geom;
  * are no end planes to check separately, no rim where a cap meets a lateral
  * surface to special case, and no orientation needed when the endpoints
  * coincide, which simply yields a sphere.
+ *
+ * <p>Both extremes of the radius are legal limiting cases rather than special
+ * cases. An axis shorter than the radius gives a nearly spherical capsule, and
+ * a {@code radius} of zero gives the axis segment itself. The zero radius shape
+ * is all surface and has no interior, however, which makes {@link #contains}
+ * unreliable against it in a way worth reading about before relying on it; see
+ * that method. Every other query is unaffected, and
+ * {@link #distanceSquaredToAxisSegment} is well behaved at any radius.
  */
 public record Capsule(Vec3 p1, Vec3 p2, double radius) {
 
     /**
      * @throws IllegalArgumentException if an endpoint is non-finite, or if the
-     *     radius is not a positive finite number
+     *     radius is negative, NaN, or infinite
      */
     public Capsule {
         if (p1 == null || p2 == null) {
@@ -34,9 +42,9 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
             throw new IllegalArgumentException(
                     "endpoints must be finite: " + p1 + ", " + p2);
         }
-        if ((radius <= 0.0) || !Double.isFinite(radius)) {
+        if ((radius < 0.0) || !Double.isFinite(radius)) {
             throw new IllegalArgumentException(
-                    "radius must be positive and finite: " + radius);
+                    "radius must be non-negative and finite: " + radius);
         }
     }
 
@@ -58,6 +66,27 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
      * <p>This is one distance comparison against the closest point on the axis
      * segment, squared on both sides to avoid a square root, which also makes
      * the comparison exact for a point placed on the surface by construction.
+     *
+     * <p><b>Do not rely on this for a capsule whose radius is zero.</b> Such a
+     * capsule is the bare axis segment: it is all surface and has no interior,
+     * so containment requires the squared distance to be exactly zero, which
+     * holds only where {@link #closestPointOnAxisSegment} reproduces {@code q}
+     * bit for bit. It does so at the endpoints and wherever {@code p1 + axis*t}
+     * happens to round back to the query point, and not otherwise. Sampling
+     * points that are mathematically on the segment, that is roughly five in
+     * six for an axis along a coordinate direction and two in three for an
+     * oblique one, so the answer here is largely a fact about rounding rather
+     * than about the geometry.
+     *
+     * <p>Callers who need that query should use
+     * {@link #distanceSquaredToAxisSegment} and compare it against a squared
+     * tolerance of their own choosing, which is the only form in which "is this
+     * point on the segment" is a well posed question in floating point. The
+     * same applies to the surface of any capsule; a zero radius is simply the
+     * case where the entire shape is surface and there is no interior left for
+     * the test to be robust in. Note that {@link #intersects} is not affected:
+     * a sphere of nonzero radius against a zero radius capsule is an ordinary
+     * comparison with room on both sides of it.
      */
     public boolean contains(Vec3 q) {
         return distanceSquaredToAxisSegment(q) <= radius * radius;
@@ -87,7 +116,9 @@ public record Capsule(Vec3 p1, Vec3 p2, double radius) {
      * against a squared threshold is exact where the corresponding comparison
      * on distances would round, so prefer it wherever a caller is only ordering
      * or thresholding distances, such as ranking capsules by proximity: square
-     * the threshold once rather than taking a root per query.
+     * the threshold once rather than taking a root per query. It is also what
+     * to use in place of {@link #contains} when the radius is zero, for the
+     * reasons given there.
      *
      * <p>Note that this measures to the axis <em>segment</em>, not to the
      * capsule's surface. Subtracting the radius is what turns it into a

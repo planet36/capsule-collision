@@ -20,7 +20,7 @@ import geom.Vec3;
 Capsule capsule = new Capsule(
         new Vec3(1, 2, 3),   // one end of the axis
         new Vec3(4, 6, 3),   // the other end of the axis
-        2.0);                // radius, which must be positive
+        2.0);                // radius, which may be zero but not negative
 
 capsule.contains(new Vec3(2.5, 4.0, 3.0));                        // point inside?
 capsule.intersects(new Sphere(new Vec3(2.5, 4.0, 7.0), 0.5));     // sphere overlapping?
@@ -36,7 +36,8 @@ the capsule, zero inside), `closestPointOnAxisSegment`, and `axis`.
 
 For ordering or thresholding distances — ranking capsules by proximity, testing
 against a cutoff — use `distanceSquaredToAxisSegment` and square the threshold
-once, rather than taking a square root per query.
+once, rather than taking a square root per query. It is also the method to use
+in place of `contains` when the radius is zero; see [Conventions](#conventions).
 
 ## Building and testing
 
@@ -127,17 +128,17 @@ files as arguments to `CapsuleTestRunner` to run them instead.
 
 Either kind of line may expect `INVALID` instead, which asserts that the shapes
 it describes are illegal and that a constructor rejects them. Such a line runs
-no query, and is how the validation rules are covered: that a capsule's radius
-must be positive while a sphere's need only be non-negative, and that no radius
-or coordinate may be NaN or infinite. Because a line names both a capsule and a
-sphere and either may be the illegal one, keep the shape that is not under test
-obviously legal.
+no query, and is how the validation rules are covered: that neither radius may
+be negative, and that no radius or coordinate may be NaN or infinite. Because a
+line names both a capsule and a sphere and either may be the illegal one, keep
+the shape that is not under test obviously legal.
 
 The cases cover on-axis and off-axis interiors, points exactly on the lateral
 surface and on the hemispherical caps, spheres exactly touching each of those,
 arbitrary axis orientations, negative coordinates, a million-to-one aspect ratio
-that stresses numerical precision, the two extreme shapes — an axis shorter than
-the radius, and coincident endpoints — and every way a shape can be illegal.
+that stresses numerical precision, the three extreme shapes — an axis shorter
+than the radius, coincident endpoints, and a zero radius — and every way a shape
+can be illegal.
 
 The runner additionally checks relationships that hold for any geometry
 regardless of the expected answers, so they catch errors the listed cases might
@@ -181,14 +182,24 @@ problems, and a capsule has none of them.
 
 - **Closed shape.** A point exactly on the surface is contained, and shapes that
   touch do intersect, subject to floating point rounding of the inputs.
-- **The capsule's radius must be positive.** A zero radius capsule is a bare
-  segment rather than a solid, so the constructor rejects it along with negative,
-  NaN, and infinite radii, and non-finite endpoints, throwing
-  `IllegalArgumentException`.
-- **A sphere's radius may be zero**, unlike the capsule's own. A zero radius
-  sphere is a point, and querying with one is meaningful; `Sphere` rejects only
-  negative, NaN, and infinite radii. Validation lives in each shape's
-  constructor, so `contains` and `intersects` are pure geometry and never throw.
+- **Neither radius may be negative**, NaN, or infinite, and no coordinate may be
+  non-finite; the constructors throw `IllegalArgumentException`. Validation lives
+  in each shape's constructor, so `contains` and `intersects` are pure geometry
+  and never throw.
+- **Either radius may be zero.** A zero radius sphere is a point, and querying
+  with one is meaningful — `contains` and `intersects` agree exactly in that
+  case. A zero radius capsule is its bare axis segment, which is the exact
+  limiting case in the same way that coincident endpoints are.
+- **`contains` is not dependable on a zero radius capsule.** Use
+  `distanceSquaredToAxisSegment` instead. That capsule is all surface and has no
+  interior, so containment demands a squared distance of exactly zero, which
+  holds only where `p1 + axis*t` rounds back to the query point: for points that
+  are mathematically on the segment, about five times in six for an axis along a
+  coordinate direction and two in three for an oblique one. Comparing the
+  squared distance against a tolerance of your own is the only well-posed form
+  of that question in floating point. `intersects` is unaffected — a sphere of
+  nonzero radius against such a capsule has room on both sides of the comparison
+  and is exact at tangency as usual.
 - **Coincident endpoints are legal**, giving a sphere of the same radius. This
   is the exact limiting case, not a special case: the closest point on a
   zero-length segment is the endpoint itself. An axis shorter than the radius is

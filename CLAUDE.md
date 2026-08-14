@@ -44,11 +44,26 @@ cylinder.
 
 ## Invariants and validation
 
-- The capsule's `radius` must be **positive**; the constructor rejects zero.
-  A `Sphere`'s radius may be **zero** (it is then a point query, and the basis
-  of one of the runner's invariants) but not negative. This asymmetry is
-  intentional, and each rule lives in its own record's constructor, which is
-  why `contains` and `intersects` are pure geometry that never throws.
+- Either radius may be **zero**, but neither may be negative, NaN, or infinite.
+  Each rule lives in its own record's constructor, which is why `contains` and
+  `intersects` are pure geometry that never throws.
+
+  A zero radius `Sphere` is a point query and the basis of one of the runner's
+  invariants. A zero radius `Capsule` is the bare axis segment. That was
+  rejected until the constructor was relaxed, on the grounds that it is "not a
+  solid"; the real objection is narrower and is now documented on
+  `Capsule.contains`, which is the only method it degrades. That capsule has no
+  interior, so containment needs a squared distance of exactly zero, which
+  holds only where `p1 + axis*t` rounds back to the query point — about 5/6 of
+  on-segment points for an axis-aligned segment, 2/3 for an oblique one. Send
+  such callers to `distanceSquaredToAxisSegment` with a tolerance of their own.
+  `intersects` and the rest are unaffected, and all six runner invariants still
+  hold exactly at radius zero, so this cost no tolerance constant.
+
+  Note that a zero radius capsule *is* the `Segment` type the architecture
+  section tells you not to add. Allowing the radius is not permission to grow
+  segment operations on `Capsule`; `distanceSquaredToAxisSegment` is already
+  the whole of what a caller needs from one.
 - Coincident endpoints are legal and yield a sphere — the exact limiting case.
   The `axisLengthSquared == 0.0` guard in `closestPointOnAxisSegment` exists
   only to avoid dividing zero by zero, not to implement a special case. An axis
